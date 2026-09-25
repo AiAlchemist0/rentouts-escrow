@@ -91,6 +91,8 @@ interface IPermissionedResolver {
     function grantRootRoles(uint256 roleBitmap, address account) external returns (bool);
     function hasRootRoles(uint256 roleBitmap, address account) external view returns (bool);
     function revokeRoles(uint256 resource, uint256 roleBitmap, address account) external returns (bool);
+    /// @dev Role bitmap `account` holds on `resource` (a key-scoped text resource is uint256(keccak256(key))).
+    function roles(uint256 resource, address account) external view returns (uint256);
     /// @dev ROLE_LINK on root. recordId 0 detaches `name` from its record (reads fall back to default).
     function linkToRecord(bytes calldata name, uint256 recordId) external;
 

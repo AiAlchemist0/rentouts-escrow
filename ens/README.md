@@ -4,8 +4,9 @@ Tenants get a soulbound **`<name>.rentouts.eth`** on the **ENSv2 beta (Ethereum 
 their rental credential as ENS text records that only RentOuts issuers can write, and any
 ENSv2-aware app can read it through the Universal Resolver. There is no RentOuts API in the read path.
 The rental track record (leases completed, disputes, rent paid, deposit return rate) is **derived
-on-chain from the RentEscrow contract** by a permissionless `CredentialSync.sync(tenant)` call, so no
-relayer or RentOuts server decides those values either.
+on-chain from the RentEscrow contract** by a permissionless `CredentialSync.sync(tenant)` call. Anyone
+can check those values against the escrow and restore them with `sync`. RentOuts issuers can still
+overwrite them while they hold issuer status (see the trust model below).
 
 | What | ENSv2 primitive we use |
 |---|---|
@@ -28,7 +29,7 @@ relayer or RentOuts server decides those values either.
 | `rentouts.leasesCompleted` | `CredentialSync.sync`, from `tenantStats.leasesCompleted` (closed without a dispute) | `3` |
 | `rentouts.disputes` | `CredentialSync.sync`, from `tenantStats.leasesDisputed` | `0` |
 | `rentouts.rentPaid` | `CredentialSync.sync`, from `tenantStats.rentPaid`: USDC (6 decimals) written with 2 decimals, rounded down | `1250.00` |
-| `rentouts.depositReturnRate` | `CredentialSync.sync`: `depositsReturned * 100 / depositsPosted`, whole percent, rounded down, capped at 100. `n/a` until a lease with a deposit has ended | `100`, `50`, `n/a` |
+| `rentouts.depositReturnRate` | `CredentialSync.sync`: `depositsReturned * 100 / depositsPosted`, whole percent, rounded down, capped at 100. `n/a` until a lease with a deposit has ended. | `100`, `50`, `n/a` |
 | `rentouts.escrow` | `CredentialSync.sync`: CAIP-10 id of the escrow the stats come from | `eip155:11155111:0x…` (lowercase) |
 | `rentouts.onTimeRate`, `rentouts.rating`, `rentouts.verified` | issuer EOA (key-scoped EAC role on the resolver, or `setCredential`): judgments the escrow can't derive | `100`, `5`, `true` |
 | `avatar`, `description`, `url`, `com.twitter`, `com.github` | holder via `setProfileText` | … |
@@ -48,6 +49,7 @@ ens/
   test/EnsForkBase.sol             shared fork setup: fresh ENSv2 proxies, parent via commit/reveal
   test/RentoutsSubnames.fork.t.sol fork tests against live ENSv2 on Sepolia
   test/CredentialSync.fork.t.sol   CredentialSync against live ENSv2, with a mock escrow for the stats
+  test/DeployEnsRoles.fork.t.sol   the script's issuer key roles: judged keys only, removeIssuer revokes all
   deployments/sepolia.json         written by the deploy script (addresses for the app)
 ```
 
@@ -88,8 +90,8 @@ Signing uses a Foundry keystore account (`rentouts-deployer` by default). No pri
 It is an issuer on `RentoutsSubnames`. If the admin removes it (`setIssuer(sync, false)`), `sync` reverts with `NotIssuer`. The `credentialSync` phase is safe to re-run. It reuses the deployed contract when the escrow is unchanged. When `ESCROW_ADDRESS` changes, it deploys a new contract and takes issuer rights away from the old one, so stale stats can't be written. It records `credentialSync` and `escrow` in `deployments/sepolia.json`. A sync writes 5 text records: about 350k gas for the first write and about 210k gas for a refresh (fork-test gas report).
 
 **Trust model.** The escrow-derived keys are verifiable, but not write-protected against RentOuts issuers:
-- The issuer EOA's key-scoped roles from the first deploy include `rentouts.leasesCompleted`, `rentouts.disputes` and `rentouts.escrow`. They were granted before `CredentialSync` existed.
-- Any `RentoutsSubnames` issuer can call `setCredential` on any `rentouts.*` key.
+- Any `RentoutsSubnames` issuer, including the issuer EOA, can call `setCredential` on any `rentouts.*` key, so it can overwrite these records until the admin removes it (`removeIssuer`).
+- On the resolver itself, the `subnames` phase gives the issuer EOA key-scoped roles for `rentouts.onTimeRate`, `rentouts.rating` and `rentouts.verified` only. It revokes any role the issuer EOA holds on an escrow-derived key. The first live deploy granted `rentouts.leasesCompleted`, `rentouts.disputes` and `rentouts.escrow`. Re-running `BROADCAST=true ./scripts/ens.sh subnames` once removes them (3 `revokeRoles` txs; the other steps are skipped). The same fix with cast, per key: `cast send <resolver> "revokeRoles(uint256,uint256,address)" $(cast keccak rentouts.leasesCompleted) 16 <issuer> --account rentouts-deployer --rpc-url $SEPOLIA_RPC_URL`.
 
 The values are a pure function of public escrow state, though. Anyone can call `sync` to restore them (tested), and an app can compare them with `escrow.tenantStats(tenant)` before showing them.
 

@@ -17,7 +17,7 @@ Running, timestamped log of the ENS track (owner: Bektur), updated as we go. Tim
 | `UserRegistry` (proxy) | [`0xD2D122000D4725a863376EcAe4220BC20590f382`](https://sepolia.etherscan.io/address/0xD2D122000D4725a863376EcAe4220BC20590f382) |
 | `RentoutsSubnames` | [`0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60`](https://eth-sepolia.blockscout.com/address/0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60) — source verified (Sourcify `exact_match`, Blockscout) |
 | Deployer / admin (keystore `rentouts-deployer`) | `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE` |
-| Issuer (keystore `rentouts-issuer`) | `0xF6048B190D178Fb6F0870c65CD2F7E06381713C4` — key-scoped `SET_TEXT` on the six `rentouts.*` keys, **no** root resolver roles |
+| Issuer (keystore `rentouts-issuer`) | `0xF6048B190D178Fb6F0870c65CD2F7E06381713C4` — key-scoped `SET_TEXT` on the six `rentouts.*` keys (target: only `onTimeRate`, `rating`, `verified`; the three escrow-derived grants are revoked by re-running `subnames`, see 23:05), **no** root resolver roles |
 | Demo holder (keystore `rentouts-alice`) | `0x484811c8c967809bE644A89d677933c29fb9e936` → **`alice.rentouts.eth`** ✅ |
 | Parent records | `addr` = `0x7ed696c879a1a7FD2eD3b49d9982E634a8647eb1` (RentOuts' published address), `url` = `https://rentouts.co`, `email` = `partners@rentouts.co`, `com.twitter` = `RentOuts`, `description` |
 | Machine-readable | [`ens/deployments/sepolia.json`](../../ens/deployments/sepolia.json) |
@@ -94,9 +94,16 @@ Running, timestamped log of the ENS track (owner: Bektur), updated as we go. Tim
 - World gate stays on hold.
 - The core escrow (`RentEscrow`) had no owner and is the demo's spine: built now on `feat/core-escrow`, branched from Dean's `feat/curvegrid-rwa` so it can mint `LeaseShare1155` shares.
 
+**23:05 — Review fix: the issuer EOA no longer gets resolver roles on escrow-derived keys.** Review found (live `roles()` read) that the issuer EOA holds `SET_TEXT` on `rentouts.leasesCompleted`, `rentouts.disputes` and `rentouts.escrow`, and that every `subnames` run granted them again.
+- `DeployEns.s.sol`: `ISSUER_KEYS` is now `onTimeRate`, `rating` and `verified` only. `subnames()` revokes any issuer-EOA role on the five `CredentialSync` keys, and `removeIssuer()` revokes all eight. Fork test `test/DeployEnsRoles.fork.t.sol` covers this; it fails against the old key list.
+- Live dry-run of `subnames` on Sepolia simulates exactly 3 `revokeRoles` txs and nothing else. **Not broadcast yet.**
+- The README no longer claims no RentOuts server can affect the derived values. Any `RentoutsSubnames` issuer can still `setCredential` them until it is removed; `sync` restores them.
+
 ---
 
 ## Open items
+
+- [ ] Broadcast the issuer role cleanup (Bektur, deployer keystore): `BROADCAST=true ./scripts/ens.sh subnames`. Then confirm that `roles(keccak256("rentouts.leasesCompleted"), issuer)` returns 0.
 
 - [x] Claim `alice.rentouts.eth` → **gate** (22:24).
 - [ ] `CredentialSync` (replaces the off-chain relayer): permissionless `sync(tenant)` reads `RentEscrow.tenantStats` and writes `rentouts.*` via `RentoutsSubnames` (made an issuer).

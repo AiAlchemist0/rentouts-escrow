@@ -30,7 +30,8 @@ import {EnsSepolia} from "./EnsSepolia.sol";
 ///           infra()    PermissionedResolver + UserRegistry proxies via ENS VerifiableFactory
 ///           commit()   commit/reveal step 1 for <ENS_PARENT_LABEL>.eth (writes a gitignored secret)
 ///           register() step 2, >= MIN_COMMITMENT_AGE later: pays + registers the parent
-///           subnames() deploys RentoutsSubnames and wires registry/resolver roles + issuer
+///           subnames() deploys RentoutsSubnames and wires registry/resolver roles + issuer; the issuer
+///                      EOA gets key roles on the issuer-judged keys only (escrow-derived ones revoked)
 ///           profile()  parent records (addr, url, email, com.twitter, description) from env
 ///           claim()    issuer mints <ENS_DEMO_LABEL>.<parent> to ENS_DEMO_HOLDER (the go/no-go gate)
 ///           removeIssuer() disables ENS_REMOVE_ISSUER on the contract AND revokes its resolver key roles
@@ -48,14 +49,16 @@ contract DeployEns is Script {
     IUserRegistry constant ETH_REGISTRY = IUserRegistry(EnsSepolia.ETH_REGISTRY);
     IUniversalResolver constant UR = IUniversalResolver(EnsSepolia.UNIVERSAL_RESOLVER);
 
-    // Credential keys the issuer EOA may write directly on the resolver (ENS-enforced, key-scoped).
-    string[6] ISSUER_KEYS = [
+    // Issuer-judged keys the issuer EOA may write directly on the resolver (ENS-enforced, key-scoped).
+    string[3] ISSUER_KEYS = ["rentouts.onTimeRate", "rentouts.rating", "rentouts.verified"];
+    // Escrow-derived keys (CredentialSync). The issuer EOA must hold no resolver role on these. The
+    // first deploy granted it leasesCompleted, disputes and escrow; subnames() revokes such grants.
+    string[5] DERIVED_KEYS = [
         "rentouts.leasesCompleted",
-        "rentouts.onTimeRate",
         "rentouts.disputes",
-        "rentouts.rating",
-        "rentouts.escrow",
-        "rentouts.verified"
+        "rentouts.rentPaid",
+        "rentouts.depositReturnRate",
+        "rentouts.escrow"
     ];
 
     string label;
@@ -220,10 +223,7 @@ contract DeployEns is Script {
         uint256 resRoles = ResolverRoles.ROLE_SET_ADDRESS | ResolverRoles.ROLE_SET_TEXT | ResolverRoles.ROLE_LINK;
         if (!resolver.hasRootRoles(resRoles, address(sub))) resolver.grantRootRoles(resRoles, address(sub));
         if (!sub.isIssuer(issuer)) sub.setIssuer(issuer, true);
-        // ENS-native key-scoped rights for the issuer EOA (the EAC showcase). A no-op if already held.
-        for (uint256 i; i < ISSUER_KEYS.length; ++i) {
-            resolver.grantSetterRoles(abi.encodeCall(IPermissionedResolver.setText, (hex"00", ISSUER_KEYS[i], "")), issuer);
-        }
+        _wireIssuerKeyRoles(resolver, issuer);
         vm.stopBroadcast();
         _save(resolverAddr, registryAddr, address(sub), issuer);
     }
@@ -268,11 +268,7 @@ contract DeployEns is Script {
         address x = vm.envAddress("ENS_REMOVE_ISSUER");
         vm.startBroadcast(me);
         if (sub.isIssuer(x)) sub.setIssuer(x, false);
-        for (uint256 i; i < ISSUER_KEYS.length; ++i) {
-            IPermissionedResolver(resolverAddr).revokeRoles(
-                uint256(keccak256(bytes(ISSUER_KEYS[i]))), ResolverRoles.ROLE_SET_TEXT, x
-            );
-        }
+        _revokeIssuerKeyRoles(IPermissionedResolver(resolverAddr), x);
         vm.stopBroadcast();
         console2.log("issuer removed:", x);
     }
@@ -326,6 +322,46 @@ contract DeployEns is Script {
     }
 
     // ------------------------------------------------------------------------------------ helpers
+
+    /// @dev ENS-native key-scoped rights for the issuer EOA (the EAC showcase): grants the
+    ///      issuer-judged keys and revokes any role on an escrow-derived key. Idempotent.
+    function _wireIssuerKeyRoles(IPermissionedResolver resolver, address issuer) internal {
+        for (uint256 i; i < ISSUER_KEYS.length; ++i) {
+            if (!_hasKeyRole(resolver, ISSUER_KEYS[i], issuer)) {
+                resolver.grantSetterRoles(
+                    abi.encodeCall(IPermissionedResolver.setText, (hex"00", ISSUER_KEYS[i], "")), issuer
+                );
+            }
+        }
+        for (uint256 i; i < DERIVED_KEYS.length; ++i) {
+            _revokeKeyRole(resolver, DERIVED_KEYS[i], issuer);
+        }
+    }
+
+    /// @dev Revokes every rentouts.* key role `account` holds (issuer-judged and escrow-derived).
+    function _revokeIssuerKeyRoles(IPermissionedResolver resolver, address account) internal {
+        for (uint256 i; i < ISSUER_KEYS.length; ++i) {
+            _revokeKeyRole(resolver, ISSUER_KEYS[i], account);
+        }
+        for (uint256 i; i < DERIVED_KEYS.length; ++i) {
+            _revokeKeyRole(resolver, DERIVED_KEYS[i], account);
+        }
+    }
+
+    function _revokeKeyRole(IPermissionedResolver resolver, string memory key, address account) internal {
+        if (_hasKeyRole(resolver, key, account)) {
+            resolver.revokeRoles(uint256(keccak256(bytes(key))), ResolverRoles.ROLE_SET_TEXT, account);
+            console2.log("revoked resolver SET_TEXT role:", key);
+        }
+    }
+
+    function _hasKeyRole(IPermissionedResolver resolver, string memory key, address account)
+        internal
+        view
+        returns (bool)
+    {
+        return resolver.roles(uint256(keccak256(bytes(key))), account) & ResolverRoles.ROLE_SET_TEXT != 0;
+    }
 
     function _logSynced(string memory name) internal view {
         console2.log("UR leasesCompleted:", _urText(name, "rentouts.leasesCompleted"));
