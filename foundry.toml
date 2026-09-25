@@ -12,6 +12,13 @@ remappings = [
     "forge-std/=lib/openzeppelin-contracts/lib/forge-std/src/",
 ]
 
+# RentEscrow invariant suite (test/RentEscrow.invariant.t.sol): the handler only makes valid
+# calls, so any revert is a bug.
+[invariant]
+runs = 64
+depth = 64
+fail_on_revert = true
+
 [rpc_endpoints]
 base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
 
