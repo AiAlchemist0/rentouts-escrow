@@ -1,6 +1,7 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useState } from 'react'
 import {
+  getAbiItem,
   getAddress,
   keccak256,
   toBytes,
@@ -15,12 +16,14 @@ import {
 import { normalize } from 'viem/ens'
 import { useAccount, usePublicClient, useReadContract, useWriteContract } from 'wagmi'
 import { sepolia } from 'wagmi/chains'
+import { aiArbiterAbi } from './abi/aiArbiter'
 import { erc20Abi } from './abi/erc20'
 import { humanGateAbi } from './abi/humanGate'
 import { rentEscrowAbi } from './abi/rentEscrow'
 import { rentoutsSubnamesAbi } from './abi/rentoutsSubnames'
 import { CREDENTIAL_KEYS, ENS, ENV_CONTRACTS } from './config'
 import { parseAddressInput, resolveAddressInput, type ResolvedInput } from './lib/addressInput'
+import { aiArbiterProblem, type ArbiterLog, type Ruling } from './lib/aiJudge'
 import { labelUnder, type CredentialRecords } from './lib/credential'
 import { errorMessage } from './lib/errors'
 import type { HumanGateView } from './lib/humanGate'
@@ -105,7 +108,8 @@ export function useContracts(): AppContracts {
   const onChain = escrowConfig.data
   const token = onChain?.token ?? ENV_CONTRACTS.token
   const leaseShare = onChain && onChain.leaseShare !== zeroAddress ? onChain.leaseShare : ENV_CONTRACTS.leaseShare
-  const humanGate = onChain && onChain.humanGate !== zeroAddress ? onChain.humanGate : undefined
+  // Until the escrow is read, deployments.json's record of the same escrow stands in.
+  const humanGate = onChain ? (onChain.humanGate !== zeroAddress ? onChain.humanGate : undefined) : ENV_CONTRACTS.humanGate
 
   const tokenMeta = useQuery({
     queryKey: ['token-meta', token],
@@ -124,14 +128,14 @@ export function useContracts(): AppContracts {
     token,
     leaseShare,
     credentialSync: ENV_CONTRACTS.credentialSync,
-    arbiter: onChain?.arbiter,
+    arbiter: onChain?.arbiter ?? ENV_CONTRACTS.arbiter,
     humanGate,
     minPeriod: onChain?.minPeriod,
     sharesPerLease: onChain?.sharesPerLease,
     tokenDecimals: tokenMeta.data?.decimals ?? 6,
     tokenSymbol: tokenMeta.data?.symbol ?? 'USDC',
     escrowError: escrowConfig.isError
-      ? `Couldn’t read RentEscrow at ${escrow}. Check VITE_ESCROW_ADDRESS. (${errorMessage(escrowConfig.error)})`
+      ? `Couldn’t read RentEscrow at ${escrow}. Check VITE_ESCROW_ADDRESS or deployments.json. (${errorMessage(escrowConfig.error)})`
       : undefined,
   }
 }
@@ -433,6 +437,146 @@ export function useLeases(escrow: Address | undefined) {
         claimableAmount: claimables[i][1],
         escrowBalance: balances[i],
       }))
+    },
+  })
+}
+
+// ------------------------------------------------------------------ AI dispute judge
+
+export type AiArbiterInfo = {
+  address: Address
+  /** The human arbiter: resolves directly, handles appeals, overrides proposals. */
+  human: Address
+  /** The AI judge service key; undefined = AI proposals switched off. */
+  agent?: Address
+  challengeWindow: number
+  /** AIArbiter.escrow(); undefined until the human calls bindEscrow. */
+  boundEscrow?: Address
+  maxStatementBytes: number
+  maxStatementsPerParty: number
+  /** Where log scans start, if deployments.json recorded it. */
+  fromBlock?: bigint
+}
+
+export type AiArbiterState = {
+  info?: AiArbiterInfo
+  /** Why AI rulings can't settle this escrow's disputes (not bound, bound elsewhere, not the escrow's arbiter). */
+  problem?: string
+  /** A configured AIArbiter (env / deployments.json) that can't be read. */
+  error?: string
+}
+
+/**
+ * The AIArbiter: VITE_AI_ARBITER_ADDRESS, else deployments.json "sepoliaAIArbiter", else RentEscrow.arbiter()
+ * if that turns out to be one (it answers escrow(), human(), agent() ...). A plain-account arbiter just
+ * yields no info, and the lease screen falls back to direct resolveDispute.
+ */
+export function useAiArbiter(): AiArbiterState {
+  const client = useSepoliaClient()
+  const { escrow, arbiter } = useContracts()
+  const configured = ENV_CONTRACTS.aiArbiter
+  const candidate = configured ?? arbiter
+  const query = useQuery({
+    queryKey: ['ai-arbiter', candidate],
+    enabled: !!candidate,
+    staleTime: 60_000,
+    retry: configured ? 2 : false,
+    queryFn: async (): Promise<AiArbiterInfo> => {
+      const at = { address: candidate!, abi: aiArbiterAbi } as const
+      const [bound, human, agent, challengeWindow, maxBytes, maxStatements] = await client.multicall({
+        allowFailure: false,
+        contracts: [
+          { ...at, functionName: 'escrow' },
+          { ...at, functionName: 'human' },
+          { ...at, functionName: 'agent' },
+          { ...at, functionName: 'challengeWindow' },
+          { ...at, functionName: 'MAX_STATEMENT_BYTES' },
+          { ...at, functionName: 'MAX_STATEMENTS_PER_PARTY' },
+        ],
+      })
+      return {
+        address: candidate!,
+        human,
+        agent: agent === zeroAddress ? undefined : agent,
+        challengeWindow,
+        boundEscrow: bound === zeroAddress ? undefined : bound,
+        maxStatementBytes: Number(maxBytes),
+        maxStatementsPerParty: Number(maxStatements),
+        // Set only when the candidate is the AIArbiter deployments.json recorded.
+        fromBlock: ENV_CONTRACTS.aiFromBlock,
+      }
+    },
+  })
+  const info = query.data
+  if (!info) {
+    return query.isError && configured
+      ? { error: `Couldn’t read the AI judge contract at ${configured}. Check VITE_AI_ARBITER_ADDRESS or deployments.json. (${errorMessage(query.error)})` }
+      : {}
+  }
+  const problem = aiArbiterProblem({ aiArbiter: info.address, boundEscrow: info.boundEscrow, escrow, escrowArbiter: arbiter })
+  return { info, problem: problem ?? undefined }
+}
+
+/** Public RPCs cap eth_getLogs ranges (publicnode: 50k blocks). */
+const LOG_WINDOW = 49_000n
+
+const ARBITER_EVENTS = [
+  getAbiItem({ abi: aiArbiterAbi, name: 'Evidence' }),
+  getAbiItem({ abi: aiArbiterAbi, name: 'Proposed' }),
+  getAbiItem({ abi: aiArbiterAbi, name: 'Appealed' }),
+] as const
+
+/**
+ * Every Evidence / Proposed / Appealed log of the AIArbiter, in one getLogs shared by all lease cards: statements
+ * and the judge's summary live only in events. Scans from the recorded deploy block, or the last 49k blocks.
+ */
+export function useArbiterLogs(info: AiArbiterInfo | undefined) {
+  const client = useSepoliaClient()
+  return useQuery({
+    queryKey: ['ai-arbiter-logs', info?.address],
+    enabled: !!info,
+    refetchInterval: 12_000,
+    queryFn: async (): Promise<ArbiterLog[]> => {
+      const latest = await client.getBlockNumber()
+      const floor = latest > LOG_WINDOW ? latest - LOG_WINDOW : 0n
+      const fromBlock = info!.fromBlock !== undefined && info!.fromBlock > floor ? info!.fromBlock : floor
+      const logs = await client.getLogs({
+        address: info!.address,
+        events: ARBITER_EVENTS,
+        fromBlock,
+        toBlock: latest,
+        strict: true,
+      })
+      const typed: ArbiterLog[] = logs
+      return typed
+    },
+  })
+}
+
+/**
+ * getRuling(leaseId) plus how many statements each party has used, in one multicall. Polled while the lease is
+ * disputed; a closed lease's ruling is final (it still refetches after this app's own transactions).
+ */
+export function useRuling(info: AiArbiterInfo | undefined, lease: { id: bigint; tenant: Address; landlord: Address }, live: boolean) {
+  const client = useSepoliaClient()
+  return useQuery({
+    // `live` in the key: when the lease closes (from any wallet) the ruling is read afresh, never left stale.
+    queryKey: ['ai-ruling', info?.address, String(lease.id), live],
+    enabled: !!info,
+    refetchInterval: live ? 12_000 : false,
+    staleTime: live ? 0 : 60_000,
+    placeholderData: keepPreviousData, // no flicker while the closed-lease read replaces the live one
+    queryFn: async (): Promise<{ ruling: Ruling; tenantStatements: number; landlordStatements: number }> => {
+      const at = { address: info!.address, abi: aiArbiterAbi } as const
+      const [ruling, tenantStatements, landlordStatements] = await client.multicall({
+        allowFailure: false,
+        contracts: [
+          { ...at, functionName: 'getRuling', args: [lease.id] },
+          { ...at, functionName: 'evidenceCount', args: [lease.id, lease.tenant] },
+          { ...at, functionName: 'evidenceCount', args: [lease.id, lease.landlord] },
+        ],
+      })
+      return { ruling, tenantStatements: Number(tenantStatements), landlordStatements: Number(landlordStatements) }
     },
   })
 }

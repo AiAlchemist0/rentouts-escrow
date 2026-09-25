@@ -1,14 +1,15 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import type { Address } from 'viem'
+import { isAddressEqual, type Address } from 'viem'
 import { Header, NetworkGuard } from './components/Header'
 import { AddressLink, ExtLink } from './components/ui'
 import { ENS } from './config'
-import { useContracts } from './hooks'
+import { useAiArbiter, useContracts } from './hooks'
 import { txUrl } from './lib/format'
 import { useTxLog } from './txLog'
 import { CreateLeasePanel } from './panels/CreateLeasePanel'
 import { FundPanel } from './panels/FundPanel'
 import { IdentityPanel } from './panels/IdentityPanel'
+import { JUDGE_MODEL } from './panels/AiJudgePanel'
 import { LeasesPanel } from './panels/LeasesPanel'
 import { SharesPanel } from './panels/SharesPanel'
 
@@ -16,7 +17,7 @@ const STEPS = [
   { id: 'identity', title: 'Claim your name', who: 'Tenant', panel: IdentityPanel },
   { id: 'create', title: 'Create a lease', who: 'Landlord', panel: CreateLeasePanel },
   { id: 'fund', title: 'Fund the lease', who: 'Tenant', panel: FundPanel },
-  { id: 'run', title: 'Run the lease', who: 'Both, and the arbiter', panel: LeasesPanel },
+  { id: 'run', title: 'Run the lease', who: 'Both, plus the AI judge', panel: LeasesPanel },
   { id: 'shares', title: 'Lease shares', who: 'Landlord', panel: SharesPanel },
 ] as const
 type StepId = (typeof STEPS)[number]['id']
@@ -69,6 +70,8 @@ function RecentTxs() {
 
 function Footer() {
   const { escrow, token, leaseShare, credentialSync, arbiter, humanGate, tokenSymbol } = useContracts()
+  const { info: ai } = useAiArbiter()
+  const arbiterIsAi = !!ai && !!arbiter && isAddressEqual(arbiter, ai.address)
   return (
     <footer className="footer">
       <div className="wrap">
@@ -76,7 +79,14 @@ function Footer() {
         <dl className="contracts">
           <ContractRow name="RentEscrow" address={escrow} />
           <ContractRow name={`Token (${tokenSymbol})`} address={token} />
-          <ContractRow name="Arbiter" address={arbiter} note={arbiter ? '(test account; a Safe in production)' : undefined} />
+          <ContractRow
+            name={arbiterIsAi ? 'Arbiter (AIArbiter)' : 'Arbiter'}
+            address={arbiter}
+            note={arbiterIsAi ? '(AI judge contract with a human arbiter)' : undefined}
+          />
+          {ai && !arbiterIsAi ? <ContractRow name="AIArbiter" address={ai.address} note="(AI judge contract with a human arbiter)" /> : null}
+          {ai ? <ContractRow name="Human arbiter" address={ai.human} note="(can always override the AI)" /> : null}
+          {ai ? <ContractRow name="AI judge key" address={ai.agent} note={ai.agent ? `(${JUDGE_MODEL}; can only propose)` : '(AI proposals off)'} /> : null}
           {humanGate ? <ContractRow name="HumanGate" address={humanGate} note="(who may fund a lease; World ID coming soon)" /> : null}
           <ContractRow name="LeaseShare1155" address={leaseShare} />
           <ContractRow name="CredentialSync" address={credentialSync} />
@@ -112,7 +122,10 @@ export function App() {
             period, the deposit comes back at the end, and each finished lease adds to the tenant’s portable ENS
             credential.
           </p>
-          <p className="hero-note">Testnet demo: Circle test USDC and a single-account arbiter (a Safe in production).</p>
+          <p className="hero-note">
+            Testnet demo with Circle test USDC. Disputes go to an AI judge contract with a human arbiter: the AI only
+            proposes a split, and the human can always override it.
+          </p>
         </section>
 
         <nav className="steps" aria-label="Demo steps">

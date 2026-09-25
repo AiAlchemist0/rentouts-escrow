@@ -927,6 +927,222 @@ input[type='range'] {
   border-top: 1px solid var(--line);
 }
 
+/* ------------------------------------------------------------------ AI dispute judge */
+
+.judge {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: var(--r-m);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.judge-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.judge-head h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.judge-rule {
+  padding-left: 10px;
+  border-left: 2px solid var(--primary);
+  color: var(--muted);
+  font-size: 13.5px;
+}
+.judge-phase {
+  font-size: 14px;
+}
+.judge-sub {
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.badge {
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--muted);
+}
+.badge-proposed {
+  color: var(--warm);
+  background: var(--warm-soft);
+}
+.badge-appealed {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.badge-executed {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+.badge-human-resolved {
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.countdown {
+  color: var(--warm);
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+.countdown strong {
+  font-size: 18px;
+}
+.countdown-over {
+  color: var(--muted);
+}
+.proposal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: var(--r-m);
+  border: 1px solid var(--line);
+  background: hsl(220 20% 8%);
+}
+.proposal-kicker {
+  color: var(--faint);
+  font-size: 12.5px;
+}
+.proposal-split {
+  color: var(--muted);
+}
+.proposal-split strong {
+  margin-right: 2px;
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.split {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--raised);
+}
+.split-tenant {
+  background: var(--primary);
+}
+.split-landlord {
+  background: var(--warm);
+}
+.proposal-meta {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px 20px;
+}
+.proposal-meta dt {
+  color: var(--faint);
+  font-size: 12.5px;
+}
+.proposal-meta dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.judge-summary {
+  margin: 0;
+  padding: 8px 14px;
+  border-left: 2px solid var(--line-strong);
+  font-size: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.statements {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+}
+.statement-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.statement-who {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.statement-who .addr {
+  color: var(--muted);
+  font-weight: 400;
+}
+.statement-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.statement-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--r-s);
+  background: var(--raised);
+}
+.statement-text {
+  font-size: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.evidence-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 640px;
+}
+.evidence-form label {
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 550;
+}
+textarea {
+  width: 100%;
+  min-height: 84px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--field);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  resize: vertical;
+}
+textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+textarea::placeholder {
+  color: hsl(220 8% 40%);
+}
+.evidence-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.resolve-title {
+  font-weight: 600;
+}
+
 /* ------------------------------------------------------------------ shares */
 
 .holdings {
@@ -1053,6 +1269,12 @@ input[type='range'] {
   .role {
     margin-left: 0;
     width: 100%;
+  }
+  .judge {
+    padding: 16px;
+  }
+  .statements {
+    grid-template-columns: 1fr;
   }
   .name-input input,
   .name-suffix {

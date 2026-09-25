@@ -92,7 +92,8 @@ export function NotConfigured({ what, envVar, children }: { what: string; envVar
   return (
     <Empty title={`${what} isn’t configured yet`}>
       <p>
-        Set <code>{envVar}</code> in <code>app/.env.local</code> and restart the dev server. {children}
+        It isn’t in <code>deployments.json</code> yet (the deploy script records it there). To use another address, set{' '}
+        <code>{envVar}</code> in <code>app/.env.local</code> and restart the dev server. {children}
       </p>
     </Empty>
   )

@@ -6,20 +6,24 @@ import {
   decodeErrorResult,
   type Hex,
 } from 'viem'
+import { aiArbiterAbi } from '../abi/aiArbiter'
 import { credentialSyncAbi } from '../abi/credentialSync'
 import { erc20Abi } from '../abi/erc20'
 import { leaseShareAbi } from '../abi/leaseShare'
 import { rentEscrowAbi } from '../abi/rentEscrow'
 import { rentoutsSubnamesAbi } from '../abi/rentoutsSubnames'
+import { RulingStatus } from './aiJudge'
 import { shortAddress } from './format'
 import { STATE_LABELS } from './lease'
 
 /**
- * Every custom error the app can meet. The escrow bubbles up errors from LeaseShare1155 and the token,
- * so a revert is decoded against all of them, not just the ABI of the contract that was called.
+ * Every custom error the app can meet. The escrow bubbles up errors from LeaseShare1155 and the token (and
+ * AIArbiter those of the escrow), so a revert is decoded against all of them, not just the ABI of the contract
+ * that was called. Errors both declare (NotParty, InvalidBps, ZeroAddress) have identical signatures.
  */
 export const knownErrorsAbi = [
   ...rentEscrowAbi,
+  ...aiArbiterAbi,
   ...rentoutsSubnamesAbi,
   ...leaseShareAbi,
   ...erc20Abi,
@@ -27,6 +31,14 @@ export const knownErrorsAbi = [
 ].filter((item) => item.type === 'error')
 
 const leaseRef = (args: readonly unknown[]) => (args[0] !== undefined ? `Lease #${String(args[0])}` : 'This lease')
+
+/** Why AIArbiter has no open proposal to appeal or execute, by its Status. */
+const NO_OPEN_PROPOSAL: Record<number, string> = {
+  [RulingStatus.NONE]: 'the AI judge hasn’t proposed a ruling yet',
+  [RulingStatus.APPEALED]: 'it was appealed, so only the human arbiter can rule now',
+  [RulingStatus.EXECUTED]: 'it was already executed',
+  [RulingStatus.HUMAN_RESOLVED]: 'the human arbiter already ruled',
+}
 
 /** Plain-language message for a decoded custom error. Unknown errors fall back to their name. */
 export function describeError(name: string, args: readonly unknown[] = []): string {
@@ -63,9 +75,9 @@ export function describeError(name: string, args: readonly unknown[] = []): stri
     case 'NotTenant':
       return `Only the tenant of ${leaseRef(args).toLowerCase()} can do this.`
     case 'NotParty':
-      return 'Only the lease’s landlord or tenant can open a dispute.'
+      return `Only the landlord or the tenant of ${leaseRef(args).toLowerCase()} can do this.`
     case 'NotArbiter':
-      return 'Only the arbiter can resolve disputes.'
+      return 'Only the escrow’s arbiter, the AI judge contract, can resolve disputes. Use the AI dispute judge panel.'
     case 'NothingToClaim':
       return 'No rent has unlocked since the last claim. Wait for the next period.'
     case 'TermNotOver':
@@ -74,6 +86,40 @@ export function describeError(name: string, args: readonly unknown[] = []): stri
       return 'The tenant’s share must be between 0% and 100%.'
     case 'NotVerifiedHuman':
       return `${args[0] ? shortAddress(String(args[0])) : 'This wallet'} hasn’t passed the escrow’s human verification (World ID — coming soon), so it can’t fund a lease.`
+    // AIArbiter
+    case 'NotHuman':
+      return 'Only the human arbiter can do this.'
+    case 'NotAgent':
+      return 'Only the AI judge’s key can propose a ruling.'
+    case 'PartyCannotArbitrate':
+      return `${args[1] ? shortAddress(String(args[1])) : 'This wallet'} is a party to ${leaseRef(args).toLowerCase()}, so it can’t rule on it.`
+    case 'EscrowNotBound':
+      return 'The AI judge contract isn’t bound to the escrow yet: the human arbiter calls bindEscrow once.'
+    case 'EscrowAlreadyBound':
+    case 'NotEscrowArbiter':
+      return 'The AI judge contract is bound to one escrow only, whose arbiter must be that contract.'
+    case 'NotDisputed': {
+      const state = STATE_LABELS[Number(args[1])] ?? 'in another state'
+      return `${leaseRef(args)} is ${state.toLowerCase()}, not in dispute.`
+    }
+    case 'InvalidStatementLength':
+      return Number(args[0] ?? 0) === 0
+        ? 'Write a statement first.'
+        : `The statement is ${Number(args[0]).toLocaleString('en-US')} bytes; the limit is 1,000.`
+    case 'TooManyStatements':
+      return 'You’ve used all 5 statements for this lease.'
+    case 'SummaryTooLong':
+      return 'The ruling summary is over 1,000 bytes.'
+    case 'NoOpenProposal':
+      return `${leaseRef(args)} has no open AI proposal: ${NO_OPEN_PROPOSAL[Number(args[1])] ?? 'it is closed'}.`
+    case 'ProposalLocked':
+      return `The AI proposal on ${leaseRef(args).toLowerCase()} was appealed. Only the human arbiter can rule now.`
+    case 'ChallengeWindowOver':
+      return 'The challenge window is over, so the proposal can’t be appealed any more. Anyone can execute it now, and the human arbiter can still override it until then.'
+    case 'ChallengeWindowOpen':
+      return 'The challenge window hasn’t closed on-chain yet (Sepolia’s latest block can trail the clock by a few seconds). Try again shortly.'
+    case 'InvalidChallengeWindow':
+      return 'The challenge window must be between 1 minute and 30 days.'
     // LeaseShare1155
     case 'NotAllowlisted':
       return `${args[0] ? shortAddress(String(args[0])) : 'This address'} isn’t on the lease-share compliance allowlist, so it can’t hold lease shares.`

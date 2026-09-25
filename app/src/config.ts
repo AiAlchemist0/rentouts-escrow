@@ -1,5 +1,6 @@
 import { getAddress, isAddress, zeroAddress, type Address } from 'viem'
 import deployment from '../../ens/deployments/sepolia.json'
+import { parseDeployments, resolveContracts } from './lib/deployments'
 
 const env = import.meta.env
 
@@ -31,12 +32,41 @@ export const ENS = {
   subnamesDeployBlock: 11_779_455n,
 } as const
 
-/** Contracts that may not be deployed yet. `undefined` = not configured; the UI degrades. */
+/**
+ * The repo-root deployments.json, written by script/DeployEscrow.s.sol ("sepolia") and
+ * script/DeployAIArbiter.s.sol ("sepoliaAIArbiter"). A glob, so a checkout without the file (nothing deployed
+ * yet) still builds: the result is just empty.
+ */
+const deploymentsFile = Object.values(
+  import.meta.glob<unknown>('../../deployments.json', { eager: true, import: 'default' }),
+)[0]
+export const DEPLOYMENTS = parseDeployments(deploymentsFile)
+
+const configured = resolveContracts(
+  {
+    escrow: optionalAddress(env.VITE_ESCROW_ADDRESS),
+    leaseShare: optionalAddress(env.VITE_LEASE_SHARE_ADDRESS),
+    token: optionalAddress(env.VITE_TOKEN_ADDRESS),
+    aiArbiter: optionalAddress(env.VITE_AI_ARBITER_ADDRESS),
+  },
+  DEPLOYMENTS,
+)
+
+/**
+ * Contracts that may not be deployed yet: VITE_* env vars first, then deployments.json. `undefined` = not
+ * configured; the UI degrades. Once the escrow is read, its token(), leaseShare(), humanGate() and arbiter() win.
+ */
 export const ENV_CONTRACTS = {
-  escrow: optionalAddress(env.VITE_ESCROW_ADDRESS),
-  leaseShare: optionalAddress(env.VITE_LEASE_SHARE_ADDRESS),
+  escrow: configured.escrow,
+  leaseShare: configured.leaseShare,
   credentialSync: optionalAddress(env.VITE_CREDENTIAL_SYNC_ADDRESS),
-  token: optionalAddress(env.VITE_TOKEN_ADDRESS) ?? CIRCLE_USDC,
+  token: configured.token ?? CIRCLE_USDC,
+  humanGate: configured.humanGate,
+  arbiter: configured.arbiter,
+  /** AIArbiter. If unset, the app checks whether RentEscrow.arbiter() is one. */
+  aiArbiter: configured.aiArbiter,
+  /** Where AIArbiter log scans start (deployments.json "sepoliaAIArbiter".fromBlock), if known. */
+  aiFromBlock: configured.aiFromBlock,
 } as const
 
 export const EXPLORER = 'https://sepolia.etherscan.io'
