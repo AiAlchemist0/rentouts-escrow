@@ -126,4 +126,34 @@ contract LeaseShare1155Test is Test {
             shares.safeTransferFrom(tenant, to, LEASE_ID, amount, "");
         }
     }
+
+    // --- batch transfers route through the same _update hook, so they are gated too ---
+
+    function test_BatchTransfer_ToAllowlisted_Succeeds() public {
+        vm.prank(escrow);
+        shares.mintShare(LEASE_ID, tenant, 100);
+
+        uint256[] memory ids = new uint256[](1);
+        uint256[] memory amounts = new uint256[](1);
+        ids[0] = LEASE_ID;
+        amounts[0] = 30;
+
+        vm.prank(tenant);
+        shares.safeBatchTransferFrom(tenant, investor, ids, amounts, "");
+        assertEq(shares.balanceOf(investor, LEASE_ID), 30);
+    }
+
+    function test_BatchTransfer_ToNonAllowlisted_Reverts() public {
+        vm.prank(escrow);
+        shares.mintShare(LEASE_ID, tenant, 100);
+
+        uint256[] memory ids = new uint256[](1);
+        uint256[] memory amounts = new uint256[](1);
+        ids[0] = LEASE_ID;
+        amounts[0] = 30;
+
+        vm.prank(tenant);
+        vm.expectRevert(abi.encodeWithSelector(LeaseShare1155.NotAllowlisted.selector, outsider));
+        shares.safeBatchTransferFrom(tenant, outsider, ids, amounts, "");
+    }
 }

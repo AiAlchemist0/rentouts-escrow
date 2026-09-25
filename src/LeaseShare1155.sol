@@ -55,9 +55,10 @@ contract LeaseShare1155 is ERC1155, Ownable {
         _mint(to, leaseId, amount, ""); // recipient allowlist enforced in _update
     }
 
-    /// @dev OZ v5 single transfer hook (mint / transfer / burn). Enforces the
-    ///      allowlist on every recipient — this is the compliance-aware transfer
-    ///      logic. Burns (to == address(0)) are always permitted.
+    /// @dev OZ v5 hook for ALL balance changes — mint, single transfer, and
+    ///      batch transfer all route through here, so the allowlist covers every
+    ///      path. This is the compliance-aware transfer logic. The `to == 0`
+    ///      branch keeps burns valid should a burn entrypoint be added later.
     function _update(address from, address to, uint256[] memory ids, uint256[] memory values)
         internal
         override
