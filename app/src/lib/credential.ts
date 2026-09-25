@@ -1,4 +1,4 @@
-import { isAddressEqual, type Address } from 'viem'
+import { isAddressEqual, keccak256, stringToBytes, type Address } from 'viem'
 import type { CredentialKey } from '../config'
 
 export type CredentialRecords = Record<CredentialKey, string | null>
@@ -41,4 +41,12 @@ export function labelUnder(name: string, parent: string): string | null {
   if (!name.endsWith(suffix)) return null
   const label = name.slice(0, -suffix.length)
   return label && !label.includes('.') ? label : null
+}
+
+/**
+ * RentoutsSubnames' labelId, uint256(keccak256(bytes(label))): the key of holderOf. The label is hashed as UTF-8
+ * text. (viem's toBytes would read a label like "0xdead" as hex and hash two bytes instead.)
+ */
+export function labelId(label: string): bigint {
+  return BigInt(keccak256(stringToBytes(label)))
 }

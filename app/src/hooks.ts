@@ -3,8 +3,6 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   getAbiItem,
   getAddress,
-  keccak256,
-  toBytes,
   zeroAddress,
   type Abi,
   type Address,
@@ -24,7 +22,7 @@ import { rentoutsSubnamesAbi } from './abi/rentoutsSubnames'
 import { CREDENTIAL_KEYS, ENS, ENV_CONTRACTS } from './config'
 import { parseAddressInput, resolveAddressInput, type ResolvedInput } from './lib/addressInput'
 import { judgeFor, type ArbiterLog, type Ruling } from './lib/aiJudge'
-import { labelUnder, type CredentialRecords } from './lib/credential'
+import { labelId, labelUnder, type CredentialRecords } from './lib/credential'
 import { errorMessage } from './lib/errors'
 import type { HumanGateView } from './lib/humanGate'
 import { recordTx } from './txLog'
@@ -294,7 +292,7 @@ export function useCredential(name: string | undefined) {
               address: ENS.subnames,
               abi: rentoutsSubnamesAbi,
               functionName: 'holderOf',
-              args: [BigInt(keccak256(toBytes(label)))],
+              args: [labelId(label)],
             })
           : Promise.resolve(null),
       ])
