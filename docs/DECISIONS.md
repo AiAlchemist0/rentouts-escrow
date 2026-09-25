@@ -1,19 +1,20 @@
 # Design decisions
 
-Short architecture decision records (ADRs) for RentOuts Escrow at ETHGlobal Tokyo 2026. Each one gives the context, the decision and its consequences. The timestamped history, with transaction hashes, is in [`docs/ens/LOG.md`](./ens/LOG.md). The system itself is described in [ARCHITECTURE.md](./ARCHITECTURE.md).
+Short architecture decision records (ADRs) for RentOuts Escrow at ETHGlobal Tokyo 2026. Each one gives the context, the decision and its consequences. The timestamped history, with transaction hashes, is in [`docs/ens/LOG.md`](./ens/LOG.md). The system itself is described in [ARCHITECTURE.md](../ARCHITECTURE.md).
 
 | # | Decision | Status |
 |---|---|---|
 | [01](#adr-01-one-chain-ethereum-sepolia-for-everything) | One chain: Ethereum Sepolia for everything | accepted (Fri 22:40 JST) |
 | [02](#adr-02-non-custodial-escrow-with-full-prepayment-and-short-periods) | Non-custodial escrow with full prepayment and short periods | accepted, built |
-| [03](#adr-03-one-fixed-arbiter-that-can-only-split) | One fixed arbiter that can only split | accepted, built |
+| [03](#adr-03-one-fixed-arbiter-that-can-only-split) | One fixed arbiter that can only split | accepted, built; the arbiter is now `AIArbiter` ([ADR-11](#adr-11-an-ai-judge-that-only-proposes-a-human-has-the-last-word)) |
 | [04](#adr-04-circles-test-usdc-as-the-escrow-token) | Circle's test USDC as the escrow token | accepted (Fri 22:40 JST) |
 | [05](#adr-05-credentials-derived-on-chain-by-a-permissionless-credentialsync) | Credentials derived on-chain by a permissionless `CredentialSync` | accepted, built, not yet deployed |
 | [06](#adr-06-soulbound-through-ens-roles-not-a-custom-nft) | Soulbound through ENS roles, not a custom NFT | accepted, live |
 | [07](#adr-07-names-never-expire-revocation-is-the-only-end-labels-are-single-use) | Names never expire; revocation is the only end; labels are single-use | accepted, live |
 | [08](#adr-08-a-separate-issuer-eoa-with-key-scoped-ens-roles) | A separate issuer EOA with key-scoped ENS roles | accepted, live (role cleanup pending) |
 | [09](#adr-09-lease-shares-minted-to-an-allowlisted-landlord-at-createlease) | Lease shares minted to an allowlisted landlord at `createLease` | accepted, built |
-| [10](#adr-10-world-id-deferred-behind-an-optional-human-gate) | World ID deferred behind an optional human gate | accepted; seam in progress |
+| [10](#adr-10-world-id-behind-a-human-gate-seam-that-only-gates-new-funding) | World ID behind a human-gate seam that only gates new funding | accepted, built; World verifier on Saturday |
+| [11](#adr-11-an-ai-judge-that-only-proposes-a-human-has-the-last-word) | An AI judge that only proposes; a human has the last word | accepted, built, not yet deployed |
 
 ---
 
@@ -21,7 +22,7 @@ Short architecture decision records (ADRs) for RentOuts Escrow at ETHGlobal Toky
 
 **Context.** The ENSv2 beta (contracts-v2 tag `sepolia-deployment-2026-09-15`) exists only on Ethereum Sepolia, and ENS v1 registration there is switched off, so v2 is the only on-chain ENS path. The original brief put the escrow on Base Sepolia and ENS on Ethereum Sepolia, with an off-chain relayer copying escrow events into ENS records. Dean's `LeaseShare1155` was deployed to Base Sepolia first.
 
-**Decision.** `RentEscrow`, `LeaseShare1155`, `CredentialSync` and the ENS contracts all live on Ethereum Sepolia (11155111).
+**Decision.** `RentEscrow`, `HumanGate`, `AIArbiter`, `LeaseShare1155`, `CredentialSync` and the ENS contracts all live on Ethereum Sepolia (11155111).
 
 **Consequences.**
 - One contract can read another, so credentials can be derived on-chain ([ADR-05](#adr-05-credentials-derived-on-chain-by-a-permissionless-credentialsync)) instead of trusting a relayer.
@@ -35,13 +36,13 @@ Short architecture decision records (ADRs) for RentOuts Escrow at ETHGlobal Toky
 **Context.** Judges need to see a whole lease (fund → rent → close) in a few minutes. They also need to see that neither RentOuts nor the landlord ever holds the tenant's money.
 
 **Decision.**
-- `RentEscrow` has no owner, admin, fee or upgradeability. Its `token`, `arbiter` and `leaseShare` are immutable.
+- `RentEscrow` has no owner, admin, fee or upgradeability. Its `token`, `arbiter`, `leaseShare` and `humanGate` are immutable.
 - The tenant prepays the deposit and all rent in `fundLease`. Rent unlocks one period at a time, and a period can be as short as `MIN_PERIOD = 60` seconds.
 - `claimRent` is permissionless and can only pay the landlord.
 - `closeLease` is open to the landlord at `endTime` and to anyone one period later. That grace period gives the landlord time to dispute the deposit.
 
 **Consequences.**
-- There is no missed-payment state, so the state machine is small and four invariants cover the money ([ARCHITECTURE §6](./ARCHITECTURE.md#6-invariants-and-how-they-are-tested)).
+- There is no missed-payment state, so the state machine is small and four invariants cover the money ([ARCHITECTURE §8](../ARCHITECTURE.md#8-invariants-and-how-they-are-tested)).
 - The tenant locks the whole term up front. That's fine for a demo lease measured in cents and minutes, but a real lease needs installments or streaming.
 - With no late-payment concept, `rentouts.onTimeRate` can't be derived and stays an issuer judgment ([ADR-08](#adr-08-a-separate-issuer-eoa-with-key-scoped-ens-roles)).
 
@@ -52,12 +53,12 @@ Short architecture decision records (ADRs) for RentOuts Escrow at ETHGlobal Toky
 **Decision.**
 - The arbiter is an immutable address. `resolveDispute(id, tenantBps)` can only split a `DISPUTED` lease's remaining escrow between that lease's tenant and landlord. The tenant's share is rounded down and the landlord gets the rest.
 - The arbiter can never be a party: `createLease` reverts `InvalidTerms` if the landlord or the tenant is the arbiter, and `DeployEscrow` refuses `ESCROW_ARBITER == deployer`.
-- On testnet the arbiter is a single EOA (`0x798b…e486`). In production it would be a Safe multisig.
+- The escrow only checks `msg.sender == arbiter`, so the arbiter can be an EOA or a contract. For the demo it is the `AIArbiter` contract ([ADR-11](#adr-11-an-ai-judge-that-only-proposes-a-human-has-the-last-word)), with the human arbiter EOA `0x798b…e486` behind it. In production the human would be a Safe multisig.
 
 **Consequences.**
 - The arbiter can't take funds or pay a third party (INV-1, INV-4, both tested).
-- It still decides the split, and a disputed lease stays frozen until it rules. There is no timeout.
-- Changing the arbiter means deploying a new escrow.
+- It still decides the split, and a disputed lease stays frozen until a ruling. There is no timeout.
+- Changing the arbiter contract means deploying a new escrow. Inside `AIArbiter`, the human can rotate the AI key, hand over the human role or change the challenge window without touching the escrow.
 
 ## ADR-04: Circle's test USDC as the escrow token
 
@@ -96,7 +97,7 @@ Short architecture decision records (ADRs) for RentOuts Escrow at ETHGlobal Toky
 - The holder also gets no `SET_RESOLVER`, `SET_SUBREGISTRY` or `UNREGISTER` role.
 
 **Consequences.**
-- ENS itself enforces soulbound transfers. Both reverts were confirmed against the live `alice.rentouts.eth`.
+- ENS itself enforces soulbound transfers. Both reverts were confirmed against the live `alice.rentouts.eth` (re-checked Sat 01:22 JST).
 - The holder can't detach its credential by pointing the name at another resolver.
 - Names are **deliberately not emancipated**: the registry root (RentOuts, through `RentoutsSubnames`) keeps `UNREGISTER`. That makes revocation possible ([ADR-07](#adr-07-names-never-expire-revocation-is-the-only-end-labels-are-single-use)), and it is a trust choice we state openly.
 
@@ -122,16 +123,14 @@ Short architecture decision records (ADRs) for RentOuts Escrow at ETHGlobal Toky
 
 **Decision.**
 - The issuer is its own EOA, `0xF604…13C4`. Through `grantSetterRoles` it holds key-scoped `SET_TEXT` on `rentouts.onTimeRate`, `rentouts.rating` and `rentouts.verified` only, and no root resolver role.
-- The deploy script refuses issuer == deployer and revokes any issuer role on an escrow-derived key.
-- `removeIssuer` removes both the contract right and the resolver roles.
+- The `subnames` deploy phase refuses an issuer that holds root `SET_TEXT` on the resolver (such as the deployer), and revokes any issuer role on an escrow-derived key.
+- The `removeIssuer` deploy phase takes away both the contract right (`setIssuer(x, false)`) and the issuer's resolver key roles.
 - Holders never get raw resolver roles. They edit allowlisted profile keys through `setProfileText`.
 
 **Consequences.**
 - ENS's access control enforces "the issuer can write `rentouts.rating` but not `avatar`", and one `cast call` shows it (see [DEMO.md](./DEMO.md#optional-cli-proofs)).
 - A key-scoped role applies to every name under the resolver. That's acceptable because the issuer is RentOuts.
-- The first live deploy also granted the issuer three escrow-derived keys. Re-running the `subnames` phase revokes them.
-
-<!-- VERIFY: the issuer role cleanup broadcast (3 revokeRoles txs). A live read at 23:10 JST still showed SET_TEXT on rentouts.leasesCompleted, rentouts.disputes and rentouts.escrow. -->
+- The first live deploy also granted the issuer three escrow-derived keys (`leasesCompleted`, `disputes`, `escrow`). Re-running the `subnames` phase revokes them. As of a live `roles()` read at Sat 01:20 JST that cleanup has not been broadcast yet.
 
 ## ADR-09: Lease shares minted to an allowlisted landlord at createLease
 
@@ -147,14 +146,39 @@ Short architecture decision records (ADRs) for RentOuts Escrow at ETHGlobal Toky
 - A share records the lease position. It is not a cash-flow right: rent goes to `lease.landlord`, not pro rata to share holders.
 - There is no burn, so shares of a cancelled lease stay with the landlord. The share owner (the deployer) controls the allowlist and can mint directly.
 
-## ADR-10: World ID deferred behind an optional human gate
+## ADR-10: World ID behind a human-gate seam that only gates new funding
 
-**Context.** Proof of personhood for tenants (World ID) was in the original plan. The escrow and ENS spine had to work first, and a World integration needs its own testing time.
+**Context.** Proof of personhood for tenants (World ID) is part of the plan. The escrow and ENS spine had to work first, and a World integration needs its own testing time. But `RentEscrow` has no owner and cannot change after deployment, so World can't simply be added to it later.
 
-**Decision.** World ID moves to Saturday. `RentEscrow` gets an optional gate address, where `0` means disabled. When a gate is set, `fundLease` requires `isVerified(tenant)`.
-
-<!-- VERIFY: the human gate seam is being added to RentEscrow right now. Confirm the parameter name, the interface (isVerified(address) -> bool), the revert error, and whether IRentEscrow (and its copy in ens/) changes. -->
+**Decision.**
+- `RentEscrow` takes a `humanGate` address once, as an immutable constructor argument. `address(0)` means funding is never gated on that escrow.
+- `fundLease` is the only function that asks the gate: it reverts `NotVerifiedHuman(tenant)` unless `humanGate.isVerified(tenant)`. The check is a view call made before any state change.
+- By default `DeployEscrow` deploys a `HumanGate` owned by the deployer with `verifier = 0`, so the gate starts **open** and every tenant passes.
+- World plugs in with `HumanGate.setVerifier(worldVerifier)`: any contract that implements `isVerified(address) returns (bool)`. The escrow is not redeployed. Setting the verifier back to `0` reopens the gate.
 
 **Consequences.**
-- Adding World later is a deploy-time address, not a rewrite of the escrow. The issuer can reflect a passed check in `rentouts.verified`.
-- Until then there is no proof of personhood. One name per address is the only sybil friction.
+- The gate owner decides only **who may fund a new lease**. It holds no tokens and cannot move, freeze or redirect funds. `claimRent`, `closeLease`, `openDispute` and `resolveDispute` never consult it, so a funded lease runs to the end whatever the gate says (tested).
+- A verifier that reverts makes funding fail closed until the owner fixes or clears it. `setVerifier` refuses a non-contract (`VerifierHasNoCode`).
+- Until the World verifier is set there is no proof of personhood. One name per address is the only sybil friction. The issuer can reflect a passed check in `rentouts.verified`.
+- The owner is a single EOA on testnet; in production it would be a Safe.
+
+## ADR-11: An AI judge that only proposes; a human has the last word
+
+**Context.** A single human arbiter is slow, and a bottleneck when many small disputes arrive. An LLM can read both sides' statements and answer in seconds. But an LLM can be confidently wrong, its probabilities are not calibrated, and both parties write the evidence it reads, so either can try to sway it with a plausible false statement.
+
+**Decision.**
+- `RentEscrow`'s immutable arbiter is the `AIArbiter` contract. Its only state-changing call is `escrow.resolveDispute` (invariant AI-1), and it holds no tokens.
+- Parties post short statements on-chain (`submitEvidence`: 1–1000 bytes, at most 5 per party, stored as events).
+- The judge service (`judge/`, z.ai GLM 5.3) asks the model a fixed set of typed questions: damage beyond normal wear, whether the landlord's claim to the unearned rent is valid, whether the evidence is sufficient (each yes/no with a probability), a severity from 1 to 5, and a short rationale.
+- **Code, not the model, computes `tenantBps`** from those answers with a fixed rubric, rounded to 25 % steps.
+- The judge **abstains** (no proposal; the human decides) when the evidence is insufficient, any probability is below 0.7, or there are no statements.
+- A proposal carries `rulingHash`, the keccak256 of the canonical JSON ruling, so anyone can check what was decided and from which inputs.
+- A proposal only executes after a **challenge window** (120 s in the demo, 60 s to 30 days allowed) in which either party can appeal. After an appeal, only the human can rule.
+- The **human arbiter** (`0x798b…e486`) can rule directly or override an unexecuted proposal at any time.
+
+**Consequences.**
+- A bad AI answer, a manipulated one, or even a stolen AI or human key can at worst split one disputed lease's own escrow wrongly between its tenant and landlord. It can never pay anyone else (INV-1, INV-4, AI-1..AI-3, all tested).
+- The model never sees the tenant's track record, only its identity, so past disputes don't bias a ruling that then feeds back into that record.
+- Statements are public on-chain, and the model provider receives them.
+- The human route has no deadline, and an appeal costs only gas. A production version would add an appeal bond and a service-level deadline.
+- Text only: the judge can't check photos, documents or invoices a statement mentions.
