@@ -95,6 +95,22 @@ contract DeployEscrowTest is Test {
         script.deploy(deployer, address(usdc), arbiter, address(existing));
     }
 
+    function test_Run_DoesNotRecordDeploymentsOutsideABroadcast() public {
+        vm.setEnv("ESCROW_ARBITER", vm.toString(arbiter));
+        vm.setEnv("ESCROW_TOKEN", vm.toString(address(usdc)));
+        vm.setEnv("LEASE_SHARE", vm.toString(address(0)));
+        vm.setEnv("BROADCAST", "true"); // the old opt-in flag must no longer trigger a write
+        string memory file = "./deployments/sepolia.json";
+        bool existed = vm.exists(file);
+        string memory before = existed ? vm.readFile(file) : "";
+
+        (RentEscrow escrow,) = script.run(); // not a --broadcast run: nothing reaches the chain
+        assertEq(escrow.arbiter(), arbiter);
+
+        assertEq(vm.exists(file), existed, "deployments/sepolia.json created outside a broadcast");
+        if (existed) assertEq(vm.readFile(file), before, "deployments/sepolia.json rewritten outside a broadcast");
+    }
+
     function test_Deploy_ArbiterCannotBeAPartyOnTheDeployedEscrow() public {
         (RentEscrow escrow,) = script.deploy(deployer, address(usdc), arbiter, address(0));
         vm.prank(deployer);

@@ -7,19 +7,36 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {RentEscrow} from "../src/RentEscrow.sol";
 import {LeaseShare1155} from "../src/LeaseShare1155.sol";
 
+/// @dev forge-std's VmSafe.ForgeContext and vm.isContext, declared here because the vendored
+///      forge-std (under lib/openzeppelin-contracts) predates them. Same order, same selector.
+enum ForgeContext {
+    TestGroup,
+    Test,
+    Coverage,
+    Snapshot,
+    ScriptGroup,
+    ScriptDryRun,
+    ScriptBroadcast,
+    ScriptResume,
+    Unknown
+}
+
+interface IVmForgeContext {
+    function isContext(ForgeContext context) external view returns (bool result);
+}
+
 /// @notice Deploys RentEscrow to Ethereum Sepolia, wired to a LeaseShare1155 (a new one owned by
 ///         the deployer unless LEASE_SHARE points at an unused one the deployer owns). One
 ///         LeaseShare1155 per RentEscrow: a share contract already wired to an escrow is refused.
 ///         Signs with a Foundry keystore account (--account); never takes a raw private key.
 ///
 ///   Env: SEPOLIA_RPC_URL, ESCROW_ARBITER (required: a separate EOA, never the deployer or a lease
-///        party), ESCROW_TOKEN (default: Circle USDC on Sepolia), LEASE_SHARE (optional),
-///        BROADCAST=true to record deployments/sepolia.json.
+///        party), ESCROW_TOKEN (default: Circle USDC on Sepolia), LEASE_SHARE (optional).
 ///
 ///   Dry run (simulation only, records nothing):
 ///     forge script script/DeployEscrow.s.sol --rpc-url sepolia --sender <deployer>
-///   Deploy:
-///     BROADCAST=true forge script script/DeployEscrow.s.sol --rpc-url sepolia \
+///   Deploy (also records deployments/sepolia.json):
+///     forge script script/DeployEscrow.s.sol --rpc-url sepolia \
 ///       --account <keystore-name> --sender <deployer> --broadcast
 contract DeployEscrow is Script {
     uint256 internal constant SEPOLIA_CHAIN_ID = 11155111;
@@ -32,11 +49,14 @@ contract DeployEscrow is Script {
         address token = vm.envOr("ESCROW_TOKEN", SEPOLIA_USDC);
         address arbiter = vm.envAddress("ESCROW_ARBITER");
         address existingShares = vm.envOr("LEASE_SHARE", address(0));
-        bool record = vm.envOr("BROADCAST", false);
 
         (escrow, shares) = deploy(msg.sender, token, arbiter, existingShares); // the --sender / --account address
 
-        if (record) {
+        // Record only when forge really broadcasts (--broadcast, or --resume), never in a dry run or a
+        // test. forge runs the script before it sends the transactions, so if the broadcast does not
+        // complete, check the addresses against broadcast/DeployEscrow.s.sol/11155111/run-latest.json.
+        IVmForgeContext ctx = IVmForgeContext(address(vm));
+        if (ctx.isContext(ForgeContext.ScriptBroadcast) || ctx.isContext(ForgeContext.ScriptResume)) {
             string memory key = "sepolia";
             vm.serializeUint(key, "chainId", block.chainid);
             vm.serializeAddress(key, "token", token);
@@ -47,7 +67,7 @@ contract DeployEscrow is Script {
             vm.writeJson(json, DEPLOYMENTS_FILE);
             console2.log("recorded", DEPLOYMENTS_FILE);
         } else {
-            console2.log("BROADCAST!=true: simulation only, deployments/sepolia.json not written");
+            console2.log("no --broadcast: simulation only, deployments/sepolia.json not written");
         }
     }
 

@@ -11,7 +11,7 @@ remappings = [
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "forge-std/=lib/openzeppelin-contracts/lib/forge-std/src/",
 ]
-# script/DeployEscrow.s.sol records deployments/sepolia.json (only when BROADCAST=true)
+# script/DeployEscrow.s.sol records deployments/sepolia.json (only in a --broadcast / --resume run)
 fs_permissions = [{ access = "read-write", path = "./deployments" }]
 
 # RentEscrow invariant suite (test/RentEscrow.invariant.t.sol): the handler only makes valid

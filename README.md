@@ -15,7 +15,7 @@
 | `src/interfaces/IRentEscrow.sol` | Pinned escrow interface (lifecycle, events, errors, invariants) shared with the app and the ENS credential sync |
 | `test/RentEscrow.t.sol`, `test/RentEscrow.invariant.t.sol` | 45 unit/fuzz tests + a handler-based invariant suite (INV-1..INV-4) |
 | `script/DeployEscrow.s.sol` | Ethereum Sepolia deploy of RentEscrow + LeaseShare1155 (keystore signing) → `deployments/sepolia.json` |
-| `test/DeployEscrow.t.sol` | 7 tests of the deploy script's config checks and wiring |
+| `test/DeployEscrow.t.sol` | 8 tests of the deploy script's config checks, wiring and deployment record |
 | `deployments.json` | Live contract addresses |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Design + diagrams for the deployed contract |
 
@@ -60,7 +60,7 @@ A handler runs random create / fund / warp / claim / close / dispute / resolve /
 
 ```bash
 forge test --match-path 'test/RentEscrow*' -vv   # 45 unit/fuzz tests + 4 invariants, ~2 s
-forge test --match-path test/DeployEscrow.t.sol   # 7 deploy-script tests
+forge test --match-path test/DeployEscrow.t.sol   # 8 deploy-script tests
 ```
 
 Unit tests cover every function and exact custom-error revert, partial / complete claims with `vm.warp`, the close grace rule, cancel, 0 / 5000 / 10000 bps splits (plus a fuzzed split), share minting and the non-allowlisted-landlord revert, re-entry through the ERC-1155 receive hook, the arbiter never being a party, and tenant-stats accounting (including how a dispute payout splits into refunded rent and returned deposit).
@@ -78,9 +78,11 @@ export ESCROW_ARBITER=0x...                          # required: a separate EOA,
 forge script script/DeployEscrow.s.sol --rpc-url sepolia --sender <deployer>
 
 # deploy + write deployments/sepolia.json (add --verify with ETHERSCAN_API_KEY set)
-BROADCAST=true forge script script/DeployEscrow.s.sol --rpc-url sepolia \
+forge script script/DeployEscrow.s.sol --rpc-url sepolia \
   --account rentouts-deployer --sender <deployer> --broadcast
 ```
+
+`deployments/sepolia.json` is written only when forge is really broadcasting (`--broadcast` or `--resume`, checked with `vm.isContext`), never by a dry run or a test. forge writes it while running the script, before the transactions are mined, so if a broadcast fails part-way, check the addresses against `broadcast/DeployEscrow.s.sol/11155111/run-latest.json` before using them.
 
 The script makes the escrow the `LeaseShare1155` minter and allowlists the deployer as the demo landlord, so it refuses an `ESCROW_ARBITER` equal to the deployer (an arbiter that is also a party could open a dispute and rule the whole escrow to itself; `RentEscrow` rejects such leases anyway). It is **one `LeaseShare1155` per `RentEscrow`**: lease ids restart at 1 in every escrow and `tokenId == leaseId`, so the script refuses a `LEASE_SHARE` that is already wired to an escrow (or already holds shares of tokenId 1). To redeploy the escrow, let it deploy a new share contract. Every other landlord has to be allowlisted by the share owner before they can list: `cast send <leaseShare1155> "setAllowlist(address,bool)" <landlord> true --account rentouts-deployer --rpc-url sepolia`. The dry run simulates at ~3.9M gas (≈0.0085 ETH at ~1 gwei), which the ETHGlobal faucet's 0.05 Sepolia ETH covers.
 
