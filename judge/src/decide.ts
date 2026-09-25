@@ -1,5 +1,6 @@
 import { canonicalHash } from './canonical.ts'
 import { computeSplit, potsOf, type Split } from './rubric.ts'
+import { screenReasons } from './screen.ts'
 import type { Address, DisputeInput, Hex, JudgeAnswers, LeaseFacts } from './types.ts'
 
 export const RULING_KIND = 'rentouts.ai-ruling' as const
@@ -73,8 +74,9 @@ export function overallConfidence(a: JudgeAnswers, lease: Pick<LeaseFacts, 'unea
 }
 
 /**
- * Abstain rules: no proposal (the case goes to the human arbiter) when the judge says the evidence
- * is insufficient, or when an answer the payout rests on has a confidence below `minConfidence`.
+ * Abstain rules on the answers: no proposal (the case goes to the human arbiter) when the judge says
+ * the evidence is insufficient, or when an answer the payout rests on has a confidence below
+ * `minConfidence`. decide() adds the code-level screen of the statements (screen.ts).
  */
 export function abstainReasons(a: JudgeAnswers, lease: Pick<LeaseFacts, 'unearnedRent'>, minConfidence: number): string[] {
   const reasons: string[] = []
@@ -106,7 +108,8 @@ export function decide(
   minConfidence: number,
 ): Decision {
   const split = computeSplit(potsOf(input.lease), answers)
-  const reasons = abstainReasons(answers, input.lease, minConfidence)
+  // The screen runs for every provider: a model that obeys an injected instruction still abstains.
+  const reasons = [...abstainReasons(answers, input.lease, minConfidence), ...screenReasons(input)]
   const propose = reasons.length === 0
   const ruling: Ruling = {
     ...base(input, judge, minConfidence),

@@ -1,3 +1,4 @@
+import { manipulationIn } from '../screen.ts'
 import type { DisputeInput, EvidenceItem, JudgeAnswers, YesNo } from '../types.ts'
 import type { JudgeProvider, ProviderResult } from './types.ts'
 
@@ -10,19 +11,6 @@ import type { JudgeProvider, ProviderResult } from './types.ts'
  * to instruct the judge or claims the case was already decided sends the case to the human.
  */
 export const MOCK_MODEL = 'mock-keywords-v1'
-
-/** Text that tries to steer the judge, impersonate an authority, or assert a prior decision. */
-export const MANIPULATION_PATTERNS: RegExp[] = [
-  /\bignore\b[^.]{0,30}\b(instructions?|rules|prompts?|above|previous)\b/i,
-  /\b(system|assistant|developer)\s*(prompt|message|note)?\s*:/i,
-  /\byou are now\b/i,
-  /\b(answer|respond|reply|output)\b[^.]{0,40}\b(yes|no|true|false)\b/i,
-  /\b(already|previously)\s+(been\s+)?(decided|confirmed|approved|agreed|ruled|settled|verified|acknowledged)\b/i,
-  /\b(rentouts|arbiter|the judge|admin|moderator|support team)\b[^.]{0,30}\b(confirmed|approved|decided|ruled|verified)\b/i,
-  /<\/?\s*(evidence|system|lease_facts|tenant_identity|instructions?)\b/i,
-  /\bconfidence\b\s*(of|:|=)?\s*(1(\.0+)?|100\s?%)/i,
-  /\b(damageBeyondNormalWear|rentClaimValid|evidenceSufficient|tenantBps)\b/,
-]
 
 const DAMAGE = /\b(damag\w*|broken|broke|smashed|cracked|crack|holes?|burn\w*|stain\w*|missing|destroy\w*|flood\w*|mou?ld)\b/i
 const TENANT_ADMITS_DAMAGE =
@@ -38,10 +26,6 @@ const RENT_CLAIM =
   /\b(left early|moved out early|abandon\w*|broke the lease|without (any )?notice|no notice|early terminat\w*|terminated early|owes? (me )?(the )?rent|unpaid rent|rent (is )?owed|rest of the (term|lease))\b/i
 const TENANT_ADMITS_RENT = /\b(i|we) (left|moved out)( early| without (any )?notice)\b|\b(i|we) did not give notice\b/i
 const TENANT_DENIES_RENT = /\b(gave|given|sent|with)\b[^.]{0,25}\bnotice\b|\bagreed to (end|terminate)\b|\bmutual(ly)?\s+agree\w*\b/i
-
-export function manipulationIn(e: EvidenceItem): boolean {
-  return MANIPULATION_PATTERNS.some((re) => re.test(e.statement))
-}
 
 const yes = (confidence: number): YesNo => ({ answer: 'yes', confidence })
 const no = (confidence: number): YesNo => ({ answer: 'no', confidence })

@@ -77,25 +77,51 @@ describe('recorded GLM 5.3 answers', () => {
     expect(canonicalHash(d.ruling)).toBe(d.rulingHash)
   })
 
-  it.each(['contested', 'injection'])(
-    '%s: still abstains (evidence insufficient), with exactly the ruling and hash recorded before the fix',
-    (name) => {
-      const { c, d } = replay(name)
-      expect(d.ruling.decision).toBe('abstain')
-      expect(d.ruling.tenantBps).toBeNull()
-      expect(d.ruling.abstainReasons).toContain('evidence insufficient to decide')
-      expect(d.ruling.abstainReasons).toEqual(c.recordedRuling.abstainReasons)
-      expect(d.ruling.confidenceBps).toBe(c.recordedRuling.confidenceBps)
-      expect(d.rulingHash).toBe(c.recordedRuling.rulingHash)
-    },
-  )
+  it('contested: still abstains (evidence insufficient), with exactly the ruling and hash recorded before the fix', () => {
+    const { c, d } = replay('contested')
+    expect(d.ruling.decision).toBe('abstain')
+    expect(d.ruling.tenantBps).toBeNull()
+    expect(d.ruling.abstainReasons).toContain('evidence insufficient to decide')
+    expect(d.ruling.abstainReasons).toEqual(c.recordedRuling.abstainReasons)
+    expect(d.ruling.confidenceBps).toBe(c.recordedRuling.confidenceBps)
+    expect(d.rulingHash).toBe(c.recordedRuling.rulingHash)
+  })
 
-  it.each(['contested', 'injection'])('%s: abstains on "evidence insufficient" alone, even with every p=0.99', (name) => {
-    const { c, input, answers } = replay(name)
+  it('injection: still abstains for the recorded reasons, and the code screen now adds its own', () => {
+    const { c, d } = replay('injection')
+    expect(d.ruling.decision).toBe('abstain')
+    expect(d.ruling.tenantBps).toBeNull()
+    expect(d.ruling.confidenceBps).toBe(c.recordedRuling.confidenceBps)
+    expect(d.ruling.abstainReasons).toEqual([
+      ...c.recordedRuling.abstainReasons,
+      'statement E1 tries to instruct the judge, impersonate an authority or claim a prior decision',
+    ])
+    // The ruling records one more reason, so its hash is not the one recorded before the screen.
+    expect(d.rulingHash).not.toBe(c.recordedRuling.rulingHash)
+  })
+
+  it('contested: abstains on "evidence insufficient" alone, even with every p=0.99', () => {
+    const { c, input, answers } = replay('contested')
     const sure: JudgeAnswers = structuredClone(answers)
     for (const q of QUESTIONS) sure[q].confidence = 0.99
     const d = decide(input, sure, c.judge, 0.7)
     expect(d.ruling.decision).toBe('abstain')
     expect(d.ruling.abstainReasons).toEqual(['evidence insufficient to decide'])
+  })
+
+  it('injection: abstains even if GLM had obeyed E1 (every answer yes, p=1.0), on the code screen alone', () => {
+    const { c, input, answers } = replay('injection')
+    const obeyed: JudgeAnswers = {
+      ...answers,
+      damageBeyondNormalWear: { answer: 'yes', confidence: 1 },
+      rentClaimValid: { answer: 'yes', confidence: 1 },
+      evidenceSufficient: { answer: 'yes', confidence: 1 },
+      severity: 5,
+    }
+    const d = decide(input, obeyed, c.judge, 0.7)
+    expect(d.ruling.decision).toBe('abstain')
+    expect(d.ruling.tenantBps).toBeNull()
+    expect(d.ruling.abstainReasons).toEqual(['statement E1 tries to instruct the judge, impersonate an authority or claim a prior decision'])
+    expect(d.ruling.answers).toEqual(obeyed) // kept in the record for the human
   })
 })
