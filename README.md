@@ -105,3 +105,19 @@ forge script script/DeployLeaseShare.s.sol --rpc-url base_sepolia --broadcast --
 
 ## License
 [MIT](./LICENSE)
+
+---
+
+## Documentation
+
+For judges and reviewers: how the whole project fits together (escrow + ENS identity + RWA shares, all on Ethereum Sepolia).
+
+| Doc | What's in it |
+| --- | --- |
+| [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | Component map, roles and trust model, lease state machine, sequence diagrams for every flow, invariants and tests, ENS record schema, deployments, known limitations, repo layout |
+| [`docs/DECISIONS.md`](./docs/DECISIONS.md) | Architecture decision records: one chain, non-custodial prepaid escrow, single split-only arbiter, Circle USDC, on-chain credentials, soulbound ENS names, revocation, issuer roles, lease shares, World ID seam |
+| [`docs/PLAN.md`](./docs/PLAN.md) | Scope, weekend timeline (done / next), sponsor-track mapping, review and merge process |
+| [`docs/DEMO.md`](./docs/DEMO.md) | The ~3-minute judge demo: which wallet does what, pre-flight, fallbacks, CLI proofs |
+| [`docs/ens/LOG.md`](./docs/ens/LOG.md) | Running ENS track log with transaction hashes |
+
+Diagrams are Mermaid and render on GitHub.
