@@ -103,7 +103,17 @@ cast send <aiArbiter> "resolveByHuman(uint256,uint16)" 1 5000 --account <human> 
    - unearned rent goes to the landlord only if `rentClaimValid` is yes;
    - the tenant's share of the remaining escrow is rounded to the nearest 25 % (an exact half step rounds toward the tenant).
 
-   The judge **abstains** (no proposal; the output says *escalated to human arbiter*) if the model says the evidence is insufficient, or if any answer's probability is below `JUDGE_MIN_CONFIDENCE`. With no statements at all it abstains without calling the model.
+   The judge **abstains** (no proposal; the output says *escalated to human arbiter*) if the model says the evidence is insufficient, or if an answer the payout rests on has a probability below `JUDGE_MIN_CONFIDENCE`. With no statements at all it abstains without calling the model. The proposal's `confidenceBps` is the weakest of the answers that count:
+
+   | Answer | Counts toward the confidence |
+   | --- | --- |
+   | `evidenceSufficient` | always: it is the model's own "can this be decided at all" |
+   | `damageBeyondNormalWear` | always: the deposit is what every dispute decides |
+   | `rentClaimValid` | only if it is **yes** and there is unearned rent in escrow, i.e. only when it moves that rent to the landlord |
+
+   A "no" on the rent question leaves the unearned rent with the tenant, exactly where it goes when nobody claims it, so its probability decides nothing. Most disputes make no rent claim, and a probability for a question that does not apply is noise. In a real run on the damage-admitted demo (the tenant admits breaking the window; nobody claims rent), GLM 5.3 answered damage **yes p=0.95**, evidence sufficient **yes p=0.85**, and rent claim valid **no p=0.60**, while its own rationale said "The landlord makes no claim for unelapsed rent". An earlier version took the minimum over all three answers, so it abstained on an admitted claim. A rent claim the model cannot settle still goes to the human: `evidenceSufficient` asks whether the evidence is enough to answer both questions, and either party can appeal. The CLI marks the rent answer `not counted in confidence` when it does not count. `test/recorded-glm.test.ts` replays those recorded GLM answers: damage-admitted now proposes 75 % with confidence 85 %, and the contested and injection fixtures still abstain (evidence insufficient) with byte-identical rulings and hashes.
+
+   Splitting the rent question into "is a rent claim made?" and "is it valid?" would also work, but it changes what the model is asked and would invalidate the recorded answers. The rule above lives in code only: the checklist and the prompt are unchanged.
 4. **Commit** (`src/canonical.ts`). The ruling is canonical JSON with sorted keys and no whitespace. It holds the chain, escrow, arbiter and lease, the `inputHash` of everything read (facts and every statement), the provider and model, the answers, the rubric arithmetic, the confidence and threshold, and the decision. It contains no timestamps, so it is reproducible. `rulingHash = keccak256(canonical JSON)` goes on-chain with the proposal, and anyone holding the saved file can check it with `--verify`.
 5. **Propose** (`src/propose.ts`). The judge decrypts the keystore (Web3 Secret Storage v3, the format `cast` writes), checks that its address is AIArbiter's `agent`, simulates, then sends `propose(leaseId, tenantBps, rulingHash, confidenceBps, summary)`. The summary is the rationale, cut to 1000 bytes. If the lease has already been appealed, or the open proposal's window is over, it refuses before signing.
 
@@ -120,6 +130,7 @@ Both parties write the evidence, and both want the money. The main risk is a pla
 
 - **An LLM judge can be wrong while sounding sure.** Its probabilities are not calibrated on rental disputes: no labelled data exists, so the 0.7 threshold is a placeholder, not a measured error rate. Its rationale explains its answers but may not be the real reason for them. That is why it only **proposes**. Either party can appeal inside the window, and the human arbiter can rule directly at any time.
 - **Text only.** The judge reads short on-chain statements. It sees no photos or documents, and cannot check an invoice or a move-in report that a statement mentions. A careful liar can still write a plausible one-sided story. When the other party contests it, the case should come out "insufficient"; if it is not contested, the appeal is the safeguard.
+- **A shaky "no" on the rent question is not gated by itself.** It counts only when it moves money (see *Decide*). If the landlord does claim the rest of the rent and the model rejects the claim with low confidence, the judge relies on the model also answering `evidenceSufficient: "no"` when the sides contradict each other (the prompt requires this), and then on the appeal.
 - **Coarse splits.** Rounding to 25 % steps keeps AI rulings simple to check, but it can move up to 12.5 % of the remaining escrow away from the rubric's exact figure. A party who cares appeals, and the human can rule any bps.
 - **The mock provider is keyword matching**, for tests and offline demos only. It is not a judge.
 - **The human route has no deadline.** An appeal costs only gas, and an appealed or abstained lease stays frozen until the human arbiter rules. That arbiter is a single testnet EOA (a Safe in production). A production version would add an appeal bond and a service-level deadline.
@@ -132,13 +143,14 @@ What the contracts guarantee whatever the model says: AIArbiter's only state-cha
 
 ```bash
 npx tsc --noEmit
-npx vitest run      # 55 tests; the cast keystore cross-check runs when `cast` is on PATH
+npx vitest run      # 65 tests; the cast keystore cross-check runs when `cast` is on PATH
 ```
 
 The tests cover:
 
 - the rubric mapping and rounding;
-- abstain rules and thresholds;
+- abstain rules, thresholds, and which answers count toward the confidence;
+- a replay of the answers a real GLM 5.3 run gave on the three demo fixtures (`test/recorded/glm-5.3.json`, copied from the gitignored `out/`);
 - zod validation, the single retry, the empty-reply budget bump, and the JSON-mode fallback through the real OpenAI SDK against a mocked HTTP endpoint;
 - canonical JSON and `rulingHash` stability (including a pinned hash for the demo fixture);
 - prompt construction and the injection fixtures;

@@ -9,7 +9,7 @@ import { createPublicClient, formatUnits, getAddress, http, isAddress } from 'vi
 import { sepolia } from 'viem/chains'
 import { canonicalHash, canonicalJson } from './canonical.ts'
 import { loadDisputeInput, NotDisputedError, type ArbiterState } from './chain.ts'
-import { abstainWithoutModel, decide, type Decision } from './decide.ts'
+import { abstainWithoutModel, confidenceBasis, decide, type Decision } from './decide.ts'
 import { createProvider, isProviderName, PROVIDERS } from './providers/index.ts'
 import { sendProposal } from './propose.ts'
 import type { Address, DisputeInput } from './types.ts'
@@ -87,10 +87,13 @@ function report(input: DisputeInput, d: Decision, meta: { provider: string; mode
   const a = r.answers
   if (a) {
     const yn = (q: { answer: string; confidence: number }) => `${q.answer.padEnd(3)}  (p=${q.confidence.toFixed(2)})`
+    const rentNote = confidenceBasis(a, l).includes('rentClaimValid')
+      ? ''
+      : `  not counted in confidence: ${a.rentClaimValid.answer === 'no' ? 'leaves the unearned rent with the tenant' : 'no unearned rent to move'}`
     lines.push(
       '  answers',
       `    damage beyond normal wear     ${yn(a.damageBeyondNormalWear)}`,
-      `    landlord's rent claim valid   ${yn(a.rentClaimValid)}`,
+      `    landlord's rent claim valid   ${yn(a.rentClaimValid)}${rentNote}`,
       `    evidence sufficient           ${yn(a.evidenceSufficient)}`,
       `    severity                      ${a.severity}/5`,
       `  rationale     ${a.rationale}`,

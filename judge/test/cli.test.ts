@@ -21,6 +21,7 @@ describe('npm run judge (offline --input, mock provider)', () => {
     expect(r.status).toBe(0)
     expect(r.stderr).toMatch(/latency\s+\d+ ms/)
     expect(r.stderr).toMatch(/PROPOSE tenantBps 7500/)
+    expect(r.stderr).toMatch(/rent claim valid\s+no\s+\(p=0\.90\)\s+not counted in confidence: leaves the unearned rent with the tenant/)
     const printed = JSON.parse(r.stdout)
     const saved = JSON.parse(readFileSync(out, 'utf8'))
     expect(saved.ruling).toEqual(printed)
