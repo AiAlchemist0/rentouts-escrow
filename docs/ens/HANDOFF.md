@@ -1,5 +1,12 @@
 # ENS track handoff: RentOuts × ENSv2 (ETHGlobal Tokyo 2026)
 
+> **Status (Fri 22:25 JST):** `rentouts.eth` and `RentoutsSubnames` are **deployed on Sepolia**. The current state, addresses and decisions are in [`LOG.md`](./LOG.md), and how-to is in [`../../ens/README.md`](../../ens/README.md). Where this brief differs from what was built, the build wins:
+> - Subnames **never expire** (§3.2 `TERM` dropped).
+> - Soulbound is enforced by ENS's `unsafeTransfer` → `TransferDisallowed`. Safe transfers are blocked earlier because the registry is not emancipated (see §3.3).
+> - `revoke` wipes the whole record (`linkToRecord(name, 0)`), not just `addr`/`status`.
+> - The issuer must be a **separate account** from the deployer.
+> - §5's availability heuristics ("null `getEnsAddress` = free", `getState`) are **wrong** for retired labels. Use `simulateContract(register)`.
+
 **Owner:** Bektur (Identity/ENS track). **Branch:** `ens-integration` (merge into `main` later with a PR, together with Dean).
 **Written:** Fri 2026-09-25, about 21:45 JST, by the cloud Claude session. The work continues in a local Claude Code session on Bektur's laptop.
 **Read this first, then** [`research/ensv2-docs-research.md`](./research/ensv2-docs-research.md). That file has the raw facts behind this doc, with sources.
