@@ -3,7 +3,8 @@ import { createWalletClient, http, isAddressEqual, parseEventLogs, type PublicCl
 import { privateKeyToAccount } from 'viem/accounts'
 import { sepolia } from 'viem/chains'
 import { aiArbiterAbi } from './abi.ts'
-import type { Decision } from './decide.ts'
+import type { ArbiterState } from './chain.ts'
+import type { Decision, Ruling } from './decide.ts'
 import { decryptKeystore, keystorePath, promptHidden, KeystoreError } from './keystore.ts'
 import type { Address, Hex } from './types.ts'
 
@@ -23,6 +24,64 @@ export function truncateUtf8(text: string, maxBytes: number): string {
     size += n
   }
   return `${out}...`
+}
+
+/** Exit code when the judge abstains but an earlier AI proposal on the lease still stands. */
+export const EXIT_STANDING_PROPOSAL = 3
+
+export type ProposalPlan = { send: true; lines: string[] } | { send: false; exitCode: number; lines: string[] }
+
+/**
+ * What the CLI does once the judge has decided, given the lease's current AIArbiter ruling.
+ *
+ * The agent can only propose: it cannot withdraw an open proposal. So when the judge now abstains
+ * (e.g. after new evidence) while an earlier proposal is still PROPOSED, that proposal still
+ * executes at its deadline unless a party appeals or the human arbiter calls resolveByHuman. The
+ * plan says so (with or without --propose), and with --propose exits EXIT_STANDING_PROPOSAL instead
+ * of reporting that "the human arbiter decides".
+ *
+ * Throws when a proposal can no longer be made: the lease was appealed, or the open proposal's
+ * challenge window is over.
+ */
+export function planProposal(
+  ruling: Pick<Ruling, 'decision'>,
+  onchain: ArbiterState['ruling'] | null,
+  opts: { propose: boolean; now: bigint },
+): ProposalPlan {
+  const lines: string[] = []
+  const open = onchain?.status === 'PROPOSED'
+  const standing = ruling.decision === 'abstain' && open
+  if (standing) {
+    const over = opts.now >= onchain.deadline
+    const at = new Date(Number(onchain.deadline) * 1000).toISOString()
+    lines.push(
+      `  WARNING       an earlier AI proposal is still open: tenantBps ${onchain.tenantBps} (${(onchain.tenantBps / 100).toFixed(2)}% to the tenant), rulingHash ${onchain.rulingHash}`,
+      over
+        ? '                its window is over: ANYONE can execute it now, unless the human arbiter calls resolveByHuman first'
+        : `                it executes at ${at} unless a party appeals before then or the human arbiter calls resolveByHuman`,
+    )
+  }
+  if (!opts.propose) return { send: false, exitCode: 0, lines }
+
+  if (ruling.decision !== 'propose') {
+    if (standing) {
+      lines.push('  --propose     not sent: the judge abstained, and the agent cannot withdraw the open proposal. Tell the human arbiter.')
+      return { send: false, exitCode: EXIT_STANDING_PROPOSAL, lines }
+    }
+    lines.push(
+      onchain?.status === 'APPEALED'
+        ? '  --propose     not sent: the judge abstained; the lease is appealed, the human arbiter decides'
+        : '  --propose     not sent: the judge abstained, the human arbiter decides',
+    )
+    return { send: false, exitCode: 0, lines }
+  }
+  if (!onchain) throw new Error('--propose needs the lease read from the chain')
+  if (onchain.status === 'APPEALED') throw new Error('the lease was appealed: only the human arbiter can rule now')
+  if (open && opts.now >= onchain.deadline) {
+    throw new Error("the open proposal's challenge window is over: it can only be executed or overridden by the human")
+  }
+  if (open) lines.push('  note          this replaces the open proposal and restarts its challenge window')
+  return { send: true, lines }
 }
 
 export interface ProposeOptions {

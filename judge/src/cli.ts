@@ -10,7 +10,7 @@ import { canonicalJson } from './canonical.ts'
 import { loadDisputeInput, NotDisputedError, type ArbiterState } from './chain.ts'
 import { abstainWithoutModel, confidenceBasis, decide, type Decision } from './decide.ts'
 import { createProvider, isProviderName, PROVIDERS } from './providers/index.ts'
-import { sendProposal } from './propose.ts'
+import { EXIT_STANDING_PROPOSAL, planProposal, sendProposal } from './propose.ts'
 import { proposedPath, recordPath, verifyOnchain, verifySaved, writeRecord, type SavedRuling } from './record.ts'
 import type { Address, DisputeInput } from './types.ts'
 
@@ -37,6 +37,9 @@ const USAGE = `RentOuts AI dispute judge
   --verify <file>      check a saved ruling and exit 0 (ok) or 1: its rulingHash, and that its
                        saved input (facts + statements) is the one the ruling committed to
   --onchain            with --verify: also compare with AIArbiter.getRuling(lease) on --rpc
+
+  exit: 0 ok, 1 error, 2 usage, ${EXIT_STANDING_PROPOSAL} --propose abstained while an earlier AI proposal is still open
+       (it executes at its deadline unless a party appeals or the human calls resolveByHuman)
 
   env: ZAI_API_KEY ZAI_BASE_URL ZAI_MODEL JUDGE_REASONING_EFFORT JUDGE_MAX_TOKENS
        JUDGE_MIN_CONFIDENCE (default 0.7) JUDGE_KEYSTORE (default rentouts-judge) JUDGE_KEYSTORE_DIR
@@ -216,17 +219,12 @@ async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<number> {
   say(`  saved         ${out}`)
   if (values.json) console.log(canonicalJson(decision.ruling))
 
-  if (!values.propose) return 0
-  if (decision.ruling.decision !== 'propose') {
-    say('  --propose     not sent: the judge abstained, the human arbiter decides')
-    return 0
-  }
-  const status = arbiterState!.ruling
-  if (status.status === 'APPEALED') throw new Error('the lease was appealed: only the human arbiter can rule now')
-  if (status.status === 'PROPOSED' && BigInt(Math.floor(Date.now() / 1000)) >= status.deadline) {
-    throw new Error('the open proposal\'s challenge window is over: it can only be executed or overridden by the human')
-  }
-  if (status.status === 'PROPOSED') say('  note          this replaces the open proposal and restarts its challenge window')
+  const plan = planProposal(decision.ruling, arbiterState?.ruling ?? null, {
+    propose: values.propose,
+    now: BigInt(Math.floor(Date.now() / 1000)),
+  })
+  for (const line of plan.lines) say(line)
+  if (!plan.send) return plan.exitCode
   const { txHash, deadline } = await sendProposal({
     publicClient: client as never,
     rpcUrl,
