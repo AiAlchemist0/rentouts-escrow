@@ -1,0 +1,27 @@
+{
+  "name": "rentouts-judge",
+  "private": true,
+  "version": "0.1.0",
+  "description": "RentOuts AI dispute judge: reads a disputed RentEscrow lease, asks a model a fixed checklist, computes the split in code, and proposes it to AIArbiter.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "judge": "node src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "abi": "node scripts/gen-abi.ts"
+  },
+  "dependencies": {
+    "openai": "^7.23.0",
+    "viem": "^2.56.9",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.6",
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.11"
+  }
+}
