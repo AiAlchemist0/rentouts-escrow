@@ -11,6 +11,8 @@ remappings = [
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "forge-std/=lib/openzeppelin-contracts/lib/forge-std/src/",
 ]
+# script/DeployEscrow.s.sol records deployments/sepolia.json (only when BROADCAST=true)
+fs_permissions = [{ access = "read-write", path = "./deployments" }]
 
 # RentEscrow invariant suite (test/RentEscrow.invariant.t.sol): the handler only makes valid
 # calls, so any revert is a bug.
@@ -21,6 +23,8 @@ fail_on_revert = true
 
 [rpc_endpoints]
 base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
+sepolia = "${SEPOLIA_RPC_URL}"
 
 [etherscan]
 base_sepolia = { key = "${BASESCAN_API_KEY}", url = "https://api-sepolia.basescan.org/api" }
+sepolia = { key = "${ETHERSCAN_API_KEY}" }
