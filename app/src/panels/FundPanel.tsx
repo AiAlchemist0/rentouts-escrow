@@ -7,6 +7,7 @@ import { AddressLink, Empty, ExtLink, NotConfigured, Notice, TxStatus } from '..
 import { useContracts, useHumanGate, useLeases, useRentoutsName, useRentoutsNames, useTx, useWallet, type LeaseRow } from '../hooks'
 import { formatDuration, formatToken } from '../lib/format'
 import { humanGateNotice } from '../lib/humanGate'
+import { walletReadQuery } from '../lib/polling'
 import { totalDue } from '../lib/lease'
 
 function FundRow({
@@ -33,7 +34,7 @@ function FundRow({
     functionName: 'allowance',
     args: [account, escrow!],
     chainId: sepolia.id,
-    query: { enabled: !!escrow },
+    query: walletReadQuery(!!escrow),
   })
   const approved = allowance !== undefined && allowance >= due
   const enough = balance !== undefined && balance >= due
@@ -92,9 +93,9 @@ export function FundPanel() {
     functionName: 'balanceOf',
     args: address ? [address] : undefined,
     chainId: sepolia.id,
-    query: { enabled: !!address },
+    query: walletReadQuery(!!address),
   })
-  const { data: eth } = useBalance({ address, chainId: sepolia.id })
+  const { data: eth } = useBalance({ address, chainId: sepolia.id, query: walletReadQuery(!!address) })
   const gate = humanGateNotice(useHumanGate(address))
 
   const mine = (leases.data ?? []).filter((l) => address && l.tenant.toLowerCase() === address.toLowerCase())
