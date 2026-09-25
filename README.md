@@ -13,9 +13,11 @@
 | `script/DeployLeaseShare.s.sol` | Base Sepolia deploy script |
 | `src/RentEscrow.sol` | **Rental escrow** — holds the tenant's USDC deposit + prepaid rent, releases rent per period, returns the deposit; arbiter-split disputes |
 | `src/interfaces/IRentEscrow.sol` | Pinned escrow interface (lifecycle, events, errors, invariants) shared with the app and the ENS credential sync |
+| `src/HumanGate.sol`, `src/interfaces/IHumanGate.sol` | **Human gate** — the seam where World ID plugs in later: decides who may fund a new lease, never touches funds |
 | `test/RentEscrow.t.sol`, `test/RentEscrow.invariant.t.sol` | 45 unit/fuzz tests + a handler-based invariant suite (INV-1..INV-4) |
-| `script/DeployEscrow.s.sol` | Ethereum Sepolia deploy of RentEscrow + LeaseShare1155 (keystore signing) → `deployments/sepolia.json` |
-| `test/DeployEscrow.t.sol` | 8 tests of the deploy script's config checks, wiring and deployment record |
+| `test/HumanGate.t.sol` | 16 tests of the human gate: off, open, refusing, verifier swapped later on the same escrow, owner-only |
+| `script/DeployEscrow.s.sol` | Ethereum Sepolia deploy of RentEscrow + LeaseShare1155 + HumanGate (keystore signing) → `"sepolia"` entry of `deployments.json` |
+| `test/DeployEscrow.t.sol` | 15 tests of the deploy script's config checks, wiring and deployment record |
 | `deployments.json` | Live contract addresses |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Design + diagrams for the deployed contract |
 
@@ -27,7 +29,7 @@ _ENS identity (`RentoutsSubnames` on ENSv2, Ethereum Sepolia) lives on the `ens-
 
 **One-sentence summary:** a smart contract — not RentOuts, not the landlord — holds the tenant's deposit and prepaid rent in USDC, pays the landlord one period at a time, returns the deposit at the end, and lets a fixed arbiter, which can never be a lease's landlord or tenant, do exactly one thing: split a disputed lease's own escrow between its tenant and landlord.
 
-`src/RentEscrow.sol` implements [`src/interfaces/IRentEscrow.sol`](./src/interfaces/IRentEscrow.sol). Constructor `(token, arbiter, leaseShare)`, all immutable. No owner, no admin, no fees, no upgradeability. OpenZeppelin v5.1 `SafeERC20` + `ReentrancyGuard`, checks-effects-interactions throughout.
+`src/RentEscrow.sol` implements [`src/interfaces/IRentEscrow.sol`](./src/interfaces/IRentEscrow.sol). Constructor `(token, arbiter, leaseShare, humanGate)`, all immutable. No owner, no admin, no fees, no upgradeability. OpenZeppelin v5.1 `SafeERC20` + `ReentrancyGuard`, checks-effects-interactions throughout.
 
 ### Lifecycle
 
@@ -35,7 +37,7 @@ _ENS identity (`RentoutsSubnames` on ENSv2, Ethereum Sepolia) lives on the `ens-
 | --- | --- | --- |
 | `createLease(tenant, deposit, rentPerPeriod, periodSeconds, periods)` | landlord (never the arbiter) | → `CREATED`, ids start at 1; reverts `InvalidTerms` if the arbiter is the landlord or the tenant. Mints **100 `LeaseShare1155` shares** (`tokenId == leaseId`) to the landlord, so a landlord outside the compliance allowlist **cannot list** (the call reverts) |
 | `cancelLease(id)` | landlord | `CREATED` → `CANCELLED` (no funds involved) |
-| `fundLease(id)` | tenant | pulls `deposit + rentPerPeriod × periods` (after a USDC `approve`); `CREATED` → `ACTIVE`, the clock starts |
+| `fundLease(id)` | tenant (a verified human, if a human gate is set) | pulls `deposit + rentPerPeriod × periods` (after a USDC `approve`); `CREATED` → `ACTIVE`, the clock starts. Reverts `NotVerifiedHuman(tenant)` if the gate says no |
 | `claimRent(id)` | anyone | releases every elapsed, unclaimed period to the landlord (only ever to the landlord) |
 | `closeLease(id)` | landlord from `endTime`; anyone from `endTime + periodSeconds` | rest of the rent → landlord, deposit → tenant; `ACTIVE` → `CLOSED`. The one-period grace gives the landlord time to dispute the deposit |
 | `openDispute(id)` | tenant or landlord | `ACTIVE` → `DISPUTED`; rent is frozen |
@@ -45,9 +47,18 @@ Periods can be as short as `MIN_PERIOD = 60` seconds, so a whole lease plays out
 
 **Deposit accounting in a dispute.** The arbiter splits one pot (deposit + rent not yet released), so `depositsReturned` reads the tenant's payout in a fixed order: first a refund of rent not yet earned when the dispute was opened, then the deposit, then earned rent. Only the middle part counts as deposit returned (capped at the deposit). A ruling that gives the tenant back its unused rent but lets the landlord keep the deposit records 0 returned; one that returns the deposit and leaves earned rent to the landlord records the full deposit, whether or not that rent had been claimed. Rent stops accruing when the dispute opens, so a slow ruling changes nothing.
 
+### Human gate: where World ID plugs in
+
+The escrow has no owner and cannot change, yet World ID has to be added later. The escrow takes a `humanGate` address once, at deployment (`address(0)` = no gating, ever), and `fundLease` asks it `isVerified(tenant)`. By default the deploy script creates a `HumanGate` owned by the deployer that forwards the question to a `verifier`:
+
+- `verifier == address(0)` (as deployed): the gate is **open**, and every tenant can fund. This is the state today, since World ID is not built yet.
+- `HumanGate.setVerifier(worldAdapter)` (owner only, emits `VerifierUpdated`): from then on only addresses the verifier approves can fund **new** leases. Same escrow address, no redeploy. Setting it back to `address(0)` reopens the gate.
+
+The gate owner can only decide **who may fund a new lease**. It holds no tokens and cannot move, freeze or redirect funds. `claimRent`, `closeLease`, `openDispute` and `resolveDispute` never consult it, so a funded lease runs to the end whatever the gate says (tested). If the verifier reverts, funding fails closed until the owner fixes or clears it.
+
 ### Invariants (`test/RentEscrow.invariant.t.sol`)
 
-A handler runs random create / fund / warp / claim / close / dispute / resolve / cancel sequences across four actors, a keeper and the arbiter, and books every token transfer out of the escrow from the token's own `Transfer` logs:
+A handler runs random create / fund / warp / claim / close / dispute / resolve / cancel sequences across four actors (funding through a `HumanGate` with a verifier that approves them), a keeper and the arbiter, and books every token transfer out of the escrow from the token's own `Transfer` logs:
 
 - **INV-1** funds only ever move to the lease's tenant or landlord — every actor's balance equals minted − escrowed + received, and the arbiter / keeper / share issuer never hold a token.
 - **INV-2** `Σ escrowBalance(leaseId) == usdc.balanceOf(escrow)`, and each lease's balance matches its state.
@@ -60,7 +71,9 @@ A handler runs random create / fund / warp / claim / close / dispute / resolve /
 
 ```bash
 forge test --match-path 'test/RentEscrow*' -vv   # 45 unit/fuzz tests + 4 invariants, ~2 s
-forge test --match-path test/DeployEscrow.t.sol   # 8 deploy-script tests
+forge test --match-path test/HumanGate.t.sol      # 16 human-gate tests
+forge test --match-path test/DeployEscrow.t.sol   # 15 deploy-script tests
+forge test                                        # everything, incl. the 12 LeaseShare1155 tests (89 total)
 ```
 
 Unit tests cover every function and exact custom-error revert, partial / complete claims with `vm.warp`, the close grace rule, cancel, 0 / 5000 / 10000 bps splits (plus a fuzzed split), share minting and the non-allowlisted-landlord revert, re-entry through the ERC-1155 receive hook, the arbiter never being a party, and tenant-stats accounting (including how a dispute payout splits into refunded rent and returned deposit).
@@ -70,30 +83,37 @@ Unit tests cover every function and exact custom-error revert, partial / complet
 ```bash
 cast wallet import rentouts-deployer --interactive   # once: encrypted Foundry keystore, no PRIVATE_KEY in env
 export SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
-export ESCROW_ARBITER=0x...                          # required: a separate EOA, never the deployer or a demo landlord/tenant
-# optional: ESCROW_TOKEN (default: Circle test USDC 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238),
+export ESCROW_ARBITER=0x...                          # required: an EOA or a contract (e.g. a Safe); never the deployer or a demo landlord/tenant
+# optional: ESCROW_HUMAN_GATE (unset = deploy a new open HumanGate owned by the deployer;
+#                              "none" = no gating, ever, on this escrow; or an existing IHumanGate address),
+#           ESCROW_TOKEN (default: Circle test USDC 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238),
 #           LEASE_SHARE (an unused LeaseShare1155 the deployer owns; default: deploy a new one)
 
 # dry run: simulation only, records nothing
 forge script script/DeployEscrow.s.sol --rpc-url sepolia --sender <deployer>
 
-# deploy + write deployments/sepolia.json (add --verify with ETHERSCAN_API_KEY set)
+# deploy + record the "sepolia" entry of deployments.json (add --verify with ETHERSCAN_API_KEY set)
 forge script script/DeployEscrow.s.sol --rpc-url sepolia \
   --account rentouts-deployer --sender <deployer> --broadcast
 ```
 
-`deployments/sepolia.json` is written only when forge is really broadcasting (`--broadcast` or `--resume`, checked with `vm.isContext`), never by a dry run or a test. forge writes it while running the script, before the transactions are mined, so if a broadcast fails part-way, check the addresses against `broadcast/DeployEscrow.s.sol/11155111/run-latest.json` before using them.
+The arbiter is fixed in the escrow forever, so choose it before deploying. It can be an EOA or a contract (a Safe, or an arbiter contract deployed beforehand); the escrow only checks `msg.sender == arbiter`.
 
-The script makes the escrow the `LeaseShare1155` minter and allowlists the deployer as the demo landlord, so it refuses an `ESCROW_ARBITER` equal to the deployer (an arbiter that is also a party could open a dispute and rule the whole escrow to itself; `RentEscrow` rejects such leases anyway). It is **one `LeaseShare1155` per `RentEscrow`**: lease ids restart at 1 in every escrow and `tokenId == leaseId`, so the script refuses a `LEASE_SHARE` that is already wired to an escrow (or already holds shares of tokenId 1). To redeploy the escrow, let it deploy a new share contract. Every other landlord has to be allowlisted by the share owner before they can list: `cast send <leaseShare1155> "setAllowlist(address,bool)" <landlord> true --account rentouts-deployer --rpc-url sepolia`. The dry run simulates at ~3.9M gas (≈0.0085 ETH at ~1 gwei), which the ETHGlobal faucet's 0.05 Sepolia ETH covers.
+The script records `chainId`, `deployer`, `token`, `arbiter`, `humanGate`, `rentEscrow` and `leaseShare1155` under the `"sepolia"` key of the root `deployments.json`, as a read-modify-write of that one key, so the `"baseSepolia"` entry (the standalone `LeaseShare1155` on Base Sepolia) stays as it is. It writes only when forge is really broadcasting (`--broadcast` or `--resume`, checked with `vm.isContext`), never in a dry run or a test; a `BROADCAST` env var is not needed and does nothing on its own. forge writes the record while running the script, before the transactions are sent, so the deploy transaction hashes are not in it: they are in `broadcast/DeployEscrow.s.sol/11155111/run-latest.json`. If a broadcast fails part-way, check the addresses there before using them.
+
+The script makes the escrow the `LeaseShare1155` minter and allowlists the deployer as the demo landlord, so it refuses an `ESCROW_ARBITER` equal to the deployer (an arbiter that is also a party could open a dispute and rule the whole escrow to itself; `RentEscrow` rejects such leases anyway). It is **one `LeaseShare1155` per `RentEscrow`**: lease ids restart at 1 in every escrow and `tokenId == leaseId`, so the script refuses a `LEASE_SHARE` that is already wired to an escrow (or already holds shares of tokenId 1). To redeploy the escrow, let it deploy a new share contract. Every other landlord has to be allowlisted by the share owner before they can list: `cast send <leaseShare1155> "setAllowlist(address,bool)" <landlord> true --account rentouts-deployer --rpc-url sepolia`. With the new `HumanGate`, the deploy estimates at ~4.4M gas on a local node (about 0.0044 ETH at 1 gwei), which the ETHGlobal faucet's 0.05 Sepolia ETH covers.
+
+Plugging World ID in later is one call from the gate owner, with no escrow redeploy: `cast send <humanGate> "setVerifier(address)" <worldVerifier> --account rentouts-deployer --rpc-url sepolia`.
 
 **Demo amounts:** the ETHGlobal faucet hands out 1 USDC on Sepolia per claim, so keep demo leases small. For example, `createLease(tenant, 300000, 100000, 60, 3)` escrows a 0.30 USDC deposit + 3 × 0.10 USDC rent at 60-second periods (0.60 USDC total).
 
-- **Deployed addresses (Ethereum Sepolia):** _TBD — written to `deployments/sepolia.json` by the deploy script_
+- **Deployed addresses (Ethereum Sepolia):** _TBD — written to the `"sepolia"` entry of `deployments.json` by the deploy script_
 
 ### Honest limits
 
 - Testnet only: Ethereum Sepolia with **Circle's test USDC**. Hackathon code, not audited.
-- The arbiter is a **single EOA** for the hackathon (a Safe multisig in production). It can never be a lease's landlord or tenant and never send funds outside the lease's two parties, but it decides the split, and a disputed lease stays frozen until it rules.
+- The arbiter is a **single EOA** for the hackathon (a Safe multisig in production; the contract accepts either). It can never be a lease's landlord or tenant and never send funds outside the lease's two parties, but it decides the split, and a disputed lease stays frozen until it rules.
+- World ID is **not wired in yet**: the deployed `HumanGate` is open (verifier `0`) until a verifier is set. Its owner is the deployer EOA, who can then refuse funding of new leases (never touch existing ones).
 - Lease shares minted at `createLease` stay with the landlord if the lease is cancelled (`LeaseShare1155` has no burn).
 - The token must be a plain ERC-20 (no fee-on-transfer or rebasing), which USDC is. With shares enabled, a contract landlord must implement `onERC1155Received`.
 
