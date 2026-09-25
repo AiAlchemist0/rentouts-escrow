@@ -7,11 +7,12 @@ import { dirname } from 'node:path'
 import { parseArgs } from 'node:util'
 import { createPublicClient, formatUnits, getAddress, http, isAddress } from 'viem'
 import { sepolia } from 'viem/chains'
-import { canonicalHash, canonicalJson } from './canonical.ts'
+import { canonicalJson } from './canonical.ts'
 import { loadDisputeInput, NotDisputedError, type ArbiterState } from './chain.ts'
 import { abstainWithoutModel, confidenceBasis, decide, type Decision } from './decide.ts'
 import { createProvider, isProviderName, PROVIDERS } from './providers/index.ts'
 import { sendProposal } from './propose.ts'
+import { verifyOnchain, verifySaved } from './record.ts'
 import type { Address, DisputeInput } from './types.ts'
 
 const DEFAULT_RPC = 'https://ethereum-sepolia-rpc.publicnode.com'
@@ -30,7 +31,9 @@ const USAGE = `RentOuts AI dispute judge
   --input <file>       judge a saved DisputeInput JSON instead of reading the chain (no --propose)
   --out <file>         where to save the ruling (default out/ruling-<chainId>-<arbiter>-<lease>.json)
   --json               print the ruling JSON on stdout (the report goes to stderr)
-  --verify <file>      recompute the rulingHash of a saved ruling and exit
+  --verify <file>      check a saved ruling and exit 0 (ok) or 1: its rulingHash, and that its
+                       saved input (facts + statements) is the one the ruling committed to
+  --onchain            with --verify: also compare with AIArbiter.getRuling(lease) on --rpc
 
   env: ZAI_API_KEY ZAI_BASE_URL ZAI_MODEL JUDGE_REASONING_EFFORT JUDGE_MAX_TOKENS
        JUDGE_MIN_CONFIDENCE (default 0.7) JUDGE_KEYSTORE (default rentouts-judge) JUDGE_KEYSTORE_DIR
@@ -127,6 +130,7 @@ async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<number> {
       out: { type: 'string' },
       json: { type: 'boolean', default: false },
       verify: { type: 'string' },
+      onchain: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
     strict: true,
@@ -140,11 +144,15 @@ async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<number> {
 
   if (values.verify) {
     const saved = JSON.parse(readFileSync(values.verify, 'utf8'))
-    const hash = canonicalHash(saved.ruling)
-    const ok = saved.rulingHash === undefined || saved.rulingHash === hash
-    say(`rulingHash ${hash}${saved.rulingHash === undefined ? '' : ok ? '  (matches the saved hash)' : `  (MISMATCH: saved ${saved.rulingHash})`}`)
-    return ok ? 0 : 1
+    const offline = verifySaved(saved)
+    for (const line of offline.lines) say(line)
+    if (!offline.ok || !values.onchain) return offline.ok ? 0 : 1
+    const client = createPublicClient({ chain: sepolia, transport: http(values.rpc || env.SEPOLIA_RPC_URL || DEFAULT_RPC) })
+    const onchain = await verifyOnchain(client, saved.ruling, saved.rulingHash)
+    for (const line of onchain.lines) say(line)
+    return onchain.ok ? 0 : 1
   }
+  if (values.onchain) throw new UsageError('--onchain goes with --verify <file>')
 
   if (!values.lease && !values.input) throw new UsageError('--lease <id> is required')
   if (values.lease !== undefined && !/^\d+$/.test(values.lease)) throw new UsageError('--lease must be a lease id')

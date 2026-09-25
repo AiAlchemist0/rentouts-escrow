@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -29,6 +29,43 @@ describe('npm run judge (offline --input, mock provider)', () => {
     const v = judge(['--verify', out])
     expect(v.status).toBe(0)
     expect(v.stdout).toMatch(/matches the saved hash/)
+  })
+
+  it('--verify refuses a saved file whose input was edited after the ruling (INPUT MISMATCH, exit 1)', () => {
+    const out = join(dir, 'to-tamper.json')
+    expect(judge(['--input', 'fixtures/damage-admitted.json', '--provider', 'mock', '--out', out]).status).toBe(0)
+    const saved = JSON.parse(readFileSync(out, 'utf8'))
+    const v = judge(['--verify', out])
+    expect(v.status).toBe(0)
+    expect(v.stdout).toMatch(/inputHash\s+0x[0-9a-f]{64}\s+\(matches ruling\.inputHash/)
+
+    // Same ruling and rulingHash, different evidence: the ruling still hashes fine, the input does not.
+    const tampered = structuredClone(saved)
+    tampered.input.evidence[0].statement = 'The tenant smashed every window and flooded the flat.'
+    tampered.input.lease.deposit = '900000'
+    const bad = join(dir, 'tampered.json')
+    writeFileSync(bad, JSON.stringify(tampered))
+    const t = judge(['--verify', bad])
+    expect(t.status).toBe(1)
+    expect(t.stdout).toMatch(/rulingHash .*matches the saved hash/)
+    expect(t.stdout).toMatch(/INPUT MISMATCH: the ruling was made on 0x[0-9a-f]{64}/)
+
+    // A file without its rulingHash (or without its input) proves nothing.
+    const { rulingHash: _h, ...noHash } = saved
+    const nh = join(dir, 'no-hash.json')
+    writeFileSync(nh, JSON.stringify(noHash))
+    const n = judge(['--verify', nh])
+    expect(n.status).toBe(1)
+    expect(n.stdout).toMatch(/not a saved ruling: missing rulingHash/)
+    const { input: _i, ...noInput } = saved
+    writeFileSync(nh, JSON.stringify(noInput))
+    expect(judge(['--verify', nh]).status).toBe(1)
+  })
+
+  it('--onchain only goes with --verify', () => {
+    const r = judge(['--input', 'fixtures/damage-admitted.json', '--provider', 'mock', '--onchain'])
+    expect(r.status).toBe(2)
+    expect(r.stderr).toMatch(/--onchain goes with --verify/)
   })
 
   it('abstains on the injection fixture: escalated to human arbiter', () => {

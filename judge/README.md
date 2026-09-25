@@ -32,7 +32,7 @@ npm run judge -- --input fixtures/injection.json --provider mock    # -> ABSTAIN
 
 `run.sh` sources the team secrets file (`../../.secrets/ai.env`, or the file in `JUDGE_SECRETS_FILE`) into its own process, then runs `node src/cli.ts`. It never prints the file. `npm run judge -- …` does the same thing using the environment you already have.
 
-Every run prints the lease, the answers, the rubric arithmetic, the decision, the **latency of the model call in ms**, and the `rulingHash`. It also saves the ruling to `out/ruling-<chainId>-<arbiter>-<lease>.json`. `--json` prints the ruling JSON on stdout. `--verify <file>` recomputes a saved ruling's hash.
+Every run prints the lease, the answers, the rubric arithmetic, the decision, the **latency of the model call in ms**, and the `rulingHash`. It also saves the ruling to `out/ruling-<chainId>-<arbiter>-<lease>.json`. `--json` prints the ruling JSON on stdout. `--verify <file>` checks a saved ruling and exits 1 on any mismatch: the ruling must hash to the saved `rulingHash`, and the saved lease facts and statements must hash to the ruling's `inputHash`, so an edited statement or amount is caught. Add `--onchain` to also compare it with `AIArbiter.getRuling(lease)` (hash, and the split and confidence while the AI's proposal stands).
 
 | Flag | |
 | --- | --- |
@@ -43,7 +43,7 @@ Every run prints the lease, the answers, the rubric arithmetic, the decision, th
 | `--rpc <url>` | default `$SEPOLIA_RPC_URL`, else `https://ethereum-sepolia-rpc.publicnode.com` |
 | `--from-block <n>` | first block scanned for `DisputeOpened` / `Evidence`; default `$JUDGE_FROM_BLOCK`, else the AIArbiter record's `fromBlock`, else the last 50k blocks |
 | `--input <file>` | judge a saved `DisputeInput` (e.g. `fixtures/*.json`); cannot be combined with `--propose` |
-| `--out <file>`, `--json`, `--verify <file>` | see above |
+| `--out <file>`, `--json`, `--verify <file> [--onchain]` | see above |
 
 ### Environment
 
@@ -114,7 +114,7 @@ cast send <aiArbiter> "resolveByHuman(uint256,uint16)" 1 5000 --account <human> 
    A "no" on the rent question leaves the unearned rent with the tenant, exactly where it goes when nobody claims it, so its probability decides nothing. Most disputes make no rent claim, and a probability for a question that does not apply is noise. In a real run on the damage-admitted demo (the tenant admits breaking the window; nobody claims rent), GLM 5.3 answered damage **yes p=0.95**, evidence sufficient **yes p=0.85**, and rent claim valid **no p=0.60**, while its own rationale said "The landlord makes no claim for unelapsed rent". An earlier version took the minimum over all three answers, so it abstained on an admitted claim. A rent claim the model cannot settle still goes to the human: `evidenceSufficient` asks whether the evidence is enough to answer both questions, and either party can appeal. The CLI marks the rent answer `not counted in confidence` when it does not count. `test/recorded-glm.test.ts` replays those recorded GLM answers: damage-admitted now proposes 75 % with confidence 85 %, and the contested and injection fixtures still abstain (evidence insufficient) with byte-identical rulings and hashes.
 
    Splitting the rent question into "is a rent claim made?" and "is it valid?" would also work, but it changes what the model is asked and would invalidate the recorded answers. The rule above lives in code only: the checklist and the prompt are unchanged.
-4. **Commit** (`src/canonical.ts`). The ruling is canonical JSON with sorted keys and no whitespace. It holds the chain, escrow, arbiter and lease, the `inputHash` of everything read (facts and every statement), the provider and model, the answers, the rubric arithmetic, the confidence and threshold, and the decision. It contains no timestamps, so it is reproducible. `rulingHash = keccak256(canonical JSON)` goes on-chain with the proposal, and anyone holding the saved file can check it with `--verify`.
+4. **Commit** (`src/canonical.ts`). The ruling is canonical JSON with sorted keys and no whitespace. It holds the chain, escrow, arbiter and lease, the `inputHash` of everything read (facts and every statement), the provider and model, the answers, the rubric arithmetic, the confidence and threshold, and the decision. It contains no timestamps, so it is reproducible. `rulingHash = keccak256(canonical JSON)` goes on-chain with the proposal, and anyone holding the saved file can check it with `--verify` (add `--onchain` to compare it with the proposal on Sepolia).
 5. **Propose** (`src/propose.ts`). The judge decrypts the keystore (Web3 Secret Storage v3, the format `cast` writes), checks that its address is AIArbiter's `agent`, simulates, then sends `propose(leaseId, tenantBps, rulingHash, confidenceBps, summary)`. The summary is the rationale, cut to 1000 bytes. If the lease has already been appealed, or the open proposal's window is over, it refuses before signing.
 
 ### Evidence is attacker-controlled
