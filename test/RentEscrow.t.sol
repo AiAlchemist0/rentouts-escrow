@@ -674,10 +674,11 @@ contract RentEscrowTest is Test {
 
     function test_ResolveDispute_DepositReturnedWhileEarnedRentUnclaimed() public {
         uint256 id = _createAndFund();
-        vm.warp(escrow.endTime(id)); // all rent earned, none of it claimed
+        uint256 end = escrow.endTime(id);
+        vm.warp(end); // all rent earned, none of it claimed
         vm.prank(landlord);
         escrow.openDispute(id); // disputes the deposit in the grace window
-        vm.warp(block.timestamp + 30 days); // a slow arbiter changes nothing: earned rent is fixed at dispute time
+        vm.warp(end + 30 days); // a slow arbiter changes nothing: earned rent is fixed at dispute time
 
         // The landlord keeps the earned rent, the tenant gets the whole deposit back.
         vm.prank(arbiter);
@@ -710,12 +711,13 @@ contract RentEscrowTest is Test {
     ) public {
         bps = uint16(bound(bps, 0, 10_000));
         uint256 id = _createAndFund();
+        uint256 start = escrow.getLease(id).startTime;
         dt = bound(dt, 0, 5 * uint256(PERIOD));
-        vm.warp(block.timestamp + dt);
+        vm.warp(start + dt);
         (uint16 n,) = escrow.claimable(id);
         if (claimFirst && n > 0) escrow.claimRent(id);
         _dispute(id);
-        vm.warp(block.timestamp + bound(ruleDelay, 0, 10 * uint256(PERIOD)));
+        vm.warp(start + dt + bound(ruleDelay, 0, 10 * uint256(PERIOD))); // rent stays frozen meanwhile
 
         uint256 remaining = escrow.escrowBalance(id);
         uint256 landlordBefore = usdc.balanceOf(landlord);
