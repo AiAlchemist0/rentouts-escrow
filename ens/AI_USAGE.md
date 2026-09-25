@@ -8,6 +8,7 @@ Per ETHGlobal rules, this records where AI tools were used in this package.
 | `ens/src/interfaces/IENSv2.sol` | Claude Code (local) | Minimal interfaces transcribed from ENS `contracts-v2` source at tag `sepolia-deployment-2026-09-15`. |
 | `ens/src/RentoutsSubnames.sol` | Claude Code (local), reviewed by Bektur | Contract drafted from the handoff design; logic and role wiring reviewed by the team. |
 | `ens/test/RentoutsSubnames.fork.t.sol` | Claude Code (local) | Fork tests against live Sepolia ENSv2. |
-| `ens/script/*` | Claude Code (local) | Deploy/registration scripts. |
+| `ens/script/*`, `ens/scripts/ens.sh` | Claude Code (local) | Deploy/registration scripts, rehearsed on an anvil fork of Sepolia. |
+| review of `ens/src/RentoutsSubnames.sol` | Claude Code multi-agent review | Security, ENS-correctness and coverage review with adversarial verification; confirmed findings fixed (revoke record wipe, no expiry, single-use labels, ENSIP-15 label check, ENSIP-19 address, stricter tests). |
 
 All on-chain transactions are sent by a team member from their own Foundry keystore.

@@ -7,6 +7,7 @@
 #   ./scripts/ens.sh profile           parent records from ENS_PROFILE_*         (sends txs)
 #   ./scripts/ens.sh claim             mint ENS_DEMO_LABEL to ENS_DEMO_HOLDER    (sends txs)
 #   ./scripts/ens.sh all               parent + subnames + profile + claim
+#   ./scripts/ens.sh removeIssuer      disable ENS_REMOVE_ISSUER (contract + resolver roles) (sends txs)
 #
 # Sends nothing unless BROADCAST=true. Without it every phase is a dry-run simulation.
 # Signs with the Foundry keystore account $FOUNDRY_ACCOUNT (default rentouts-deployer):
@@ -48,15 +49,21 @@ wait_commit() {
   fi
 }
 
+need_issuer() {
+  : "${ENS_ISSUER:?set ENS_ISSUER to a SECOND account (not DEPLOYER), e.g. cast wallet address --account rentouts-issuer}"
+  [ "$(echo "$ENS_ISSUER" | tr A-F a-f)" != "$(echo "$DEPLOYER" | tr A-F a-f)" ] || { echo "ENS_ISSUER must differ from DEPLOYER"; exit 1; }
+}
+
 case "${1:-status}" in
   status)   phase status ;;
   infra)    phase infra ;;
   commit)   phase commit ;;
   register) phase register ;;
   parent)   phase infra; phase commit; wait_commit; phase register ;;
-  subnames) phase subnames ;;
+  subnames) need_issuer; phase subnames ;;
   profile)  phase profile ;;
   claim)    phase claim ;;
-  all)      phase infra; phase commit; wait_commit; phase register; phase subnames; phase profile; phase claim; phase status ;;
+  removeIssuer) phase removeIssuer ;;
+  all)      need_issuer; phase infra; phase commit; wait_commit; phase register; phase subnames; phase profile; phase claim; phase status ;;
   *) echo "unknown phase: $1"; exit 1 ;;
 esac

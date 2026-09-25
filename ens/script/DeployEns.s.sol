@@ -31,6 +31,7 @@ import {EnsSepolia} from "./EnsSepolia.sol";
 ///           subnames() deploys RentoutsSubnames and wires registry/resolver roles + issuer
 ///           profile()  parent records (addr, url, email, com.twitter, description) from env
 ///           claim()    issuer mints <ENS_DEMO_LABEL>.<parent> to ENS_DEMO_HOLDER (the go/no-go gate)
+///           removeIssuer() disables ENS_REMOVE_ISSUER on the contract AND revokes its resolver key roles
 ///
 ///         State lives in ens/deployments/sepolia.json and is only written when BROADCAST=true,
 ///         so dry runs never record addresses that don't exist.
@@ -193,19 +194,23 @@ contract DeployEns is Script {
         require(_parentIsMine(), "register the parent first");
         IPermissionedResolver resolver = IPermissionedResolver(resolverAddr);
         IUserRegistry registry = IUserRegistry(registryAddr);
-        address issuer = vm.envOr("ENS_ISSUER", me);
+        // The issuer must NOT hold root SET_TEXT on the resolver, otherwise ENS can't demonstrate the
+        // key-scoped limit (issuer writes rentouts.onTimeRate, reverts on avatar). Use a second account.
+        address issuer = vm.envAddress("ENS_ISSUER");
+        require(
+            !resolver.hasRootRoles(ResolverRoles.ROLE_SET_TEXT, issuer),
+            "ENS_ISSUER holds root SET_TEXT (is it the deployer?): use a separate issuer account"
+        );
 
         RentoutsSubnames sub = RentoutsSubnames(_get("rentoutsSubnames"));
         vm.startBroadcast(me);
         if (address(sub).code.length == 0) {
-            sub = new RentoutsSubnames(
-                registry, resolver, label, uint64(vm.envOr("ENS_SUBNAME_TERM", uint256(YEAR))), me
-            );
+            sub = new RentoutsSubnames(registry, resolver, label, me);
             console2.log("deployed RentoutsSubnames:", address(sub));
         }
         uint256 regRoles = RegistryRoles.ROLE_REGISTRAR | RegistryRoles.ROLE_UNREGISTER | RegistryRoles.ROLE_RENEW;
         if (!registry.hasRootRoles(regRoles, address(sub))) registry.grantRootRoles(regRoles, address(sub));
-        uint256 resRoles = ResolverRoles.ROLE_SET_ADDRESS | ResolverRoles.ROLE_SET_TEXT;
+        uint256 resRoles = ResolverRoles.ROLE_SET_ADDRESS | ResolverRoles.ROLE_SET_TEXT | ResolverRoles.ROLE_LINK;
         if (!resolver.hasRootRoles(resRoles, address(sub))) resolver.grantRootRoles(resRoles, address(sub));
         if (!sub.isIssuer(issuer)) sub.setIssuer(issuer, true);
         // ENS-native key-scoped rights for the issuer EOA (the EAC showcase). A no-op if already held.
@@ -247,6 +252,22 @@ contract DeployEns is Script {
         sub.register(demo, holder);
         vm.stopBroadcast();
         console2.log("claimed:", string.concat(demo, ".", label, ".eth"));
+    }
+
+    function removeIssuer() external {
+        _init();
+        (address resolverAddr,) = _requireInfra();
+        RentoutsSubnames sub = RentoutsSubnames(_get("rentoutsSubnames"));
+        address x = vm.envAddress("ENS_REMOVE_ISSUER");
+        vm.startBroadcast(me);
+        if (sub.isIssuer(x)) sub.setIssuer(x, false);
+        for (uint256 i; i < ISSUER_KEYS.length; ++i) {
+            IPermissionedResolver(resolverAddr).revokeRoles(
+                uint256(keccak256(bytes(ISSUER_KEYS[i]))), ResolverRoles.ROLE_SET_TEXT, x
+            );
+        }
+        vm.stopBroadcast();
+        console2.log("issuer removed:", x);
     }
 
     // ------------------------------------------------------------------------------------ helpers

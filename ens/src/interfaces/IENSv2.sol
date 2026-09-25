@@ -29,6 +29,7 @@ library ResolverRoles {
     uint256 internal constant ROLE_SET_TEXT = 1 << 4;
     uint256 internal constant ROLE_SET_CONTENTHASH = 1 << 8;
     uint256 internal constant ROLE_SET_DATA = 1 << 24;
+    uint256 internal constant ROLE_LINK = 1 << 28;
     uint256 internal constant ROLE_UPGRADE = 1 << 124;
 }
 
@@ -72,6 +73,9 @@ interface IUserRegistry {
 
     function safeTransferFrom(address from, address to, uint256 id, uint256 value, bytes calldata data)
         external;
+    /// @dev The transfer path that checks ROLE_CAN_TRANSFER_ADMIN (safe transfers revert first while
+    ///      the registry is not emancipated).
+    function unsafeTransfer(address to, uint256 tokenId, bytes calldata data) external;
 }
 
 /// @dev Subset of `PermissionedResolver`. Setters take the DNS-encoded name, not a namehash.
@@ -86,6 +90,9 @@ interface IPermissionedResolver {
     function grantSetterRoles(bytes calldata setter, address account) external returns (bool);
     function grantRootRoles(uint256 roleBitmap, address account) external returns (bool);
     function hasRootRoles(uint256 roleBitmap, address account) external view returns (bool);
+    function revokeRoles(uint256 resource, uint256 roleBitmap, address account) external returns (bool);
+    /// @dev ROLE_LINK on root. recordId 0 detaches `name` from its record (reads fall back to default).
+    function linkToRecord(bytes calldata name, uint256 recordId) external;
 
     /// @dev ENSIP-10 extended resolution (name-based; falls back to the default record).
     function resolve(bytes calldata name, bytes calldata data) external view returns (bytes memory);
@@ -133,6 +140,10 @@ interface IUniversalResolver {
 
 interface IAddrResolver {
     function addr(bytes32 node) external view returns (address payable);
+}
+
+interface IAddressResolver {
+    function addr(bytes32 node, uint256 coinType) external view returns (bytes memory);
 }
 
 interface ITextResolver {

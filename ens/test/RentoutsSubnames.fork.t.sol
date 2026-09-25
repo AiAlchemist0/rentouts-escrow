@@ -7,6 +7,7 @@ import {
     ALL_ROLES,
     Grant,
     IAddrResolver,
+    IAddressResolver,
     IETHRegistrar,
     IMintableERC20,
     IPermissionedResolver,
@@ -25,6 +26,11 @@ import {EnsSepolia} from "../script/EnsSepolia.sol";
 contract RentoutsSubnamesForkTest is Test {
     string constant PARENT = "rentoutsforktest";
     uint64 constant YEAR = 365 days;
+    uint256 constant COIN_TYPE_BASE_SEPOLIA = (1 << 31) | 84532; // ENSIP-11
+
+    // ENS errors (contracts-v2 @ sepolia-deployment-2026-09-15)
+    bytes4 constant EAC_UNAUTHORIZED = bytes4(keccak256("EACUnauthorizedAccountRoles(uint256,uint256,address)"));
+    bytes4 constant TRANSFER_UNSAFE = bytes4(keccak256("TransferUnsafeUntilRegistryIsEmancipated()"));
 
     IETHRegistrar registrar = IETHRegistrar(EnsSepolia.ETH_REGISTRAR);
     IUniversalResolver ur = IUniversalResolver(EnsSepolia.UNIVERSAL_RESOLVER);
@@ -33,6 +39,7 @@ contract RentoutsSubnamesForkTest is Test {
     IPermissionedResolver resolver;
     RentoutsSubnames subnames;
 
+    // Unique names: well-known test addresses (e.g. makeAddr("alice")) have EIP-7702 code on Sepolia.
     address deployer = makeAddr("rentouts.test.deployer");
     address issuer = makeAddr("rentouts.test.issuer");
     address alice = makeAddr("rentouts.test.alice");
@@ -77,12 +84,8 @@ contract RentoutsSubnamesForkTest is Test {
             PARENT, deployer, secret, address(registry), address(resolver), YEAR, EnsSepolia.ENS_MOCK_USDC, bytes32(0)
         );
 
-        // 3. RentoutsSubnames + role wiring (same as script/DeployEns.s.sol).
-        subnames = new RentoutsSubnames(registry, resolver, PARENT, YEAR, deployer);
-        registry.grantRootRoles(
-            RegistryRoles.ROLE_REGISTRAR | RegistryRoles.ROLE_UNREGISTER | RegistryRoles.ROLE_RENEW, address(subnames)
-        );
-        resolver.grantRootRoles(ResolverRoles.ROLE_SET_ADDRESS | ResolverRoles.ROLE_SET_TEXT, address(subnames));
+        // 3. RentoutsSubnames + role wiring (same as script/DeployEns.s.sol subnames()).
+        subnames = _deploySubnames();
         subnames.setIssuer(issuer, true);
         // ENS-native, key-scoped issuer right: the issuer EOA may write this key and nothing else.
         resolver.grantSetterRoles(
@@ -90,6 +93,16 @@ contract RentoutsSubnamesForkTest is Test {
         );
         resolver.setText(subnames.parentDns(), "url", "https://rentouts.co");
         vm.stopPrank();
+    }
+
+    function _deploySubnames() internal returns (RentoutsSubnames s) {
+        s = new RentoutsSubnames(registry, resolver, PARENT, deployer);
+        registry.grantRootRoles(
+            RegistryRoles.ROLE_REGISTRAR | RegistryRoles.ROLE_UNREGISTER | RegistryRoles.ROLE_RENEW, address(s)
+        );
+        resolver.grantRootRoles(
+            ResolverRoles.ROLE_SET_ADDRESS | ResolverRoles.ROLE_SET_TEXT | ResolverRoles.ROLE_LINK, address(s)
+        );
     }
 
     // ------------------------------------------------------------------ resolution
@@ -100,9 +113,10 @@ contract RentoutsSubnamesForkTest is Test {
 
     function test_ClaimResolvesAddrAndCredential() public {
         uint256 tokenId = _claim(alice, "alice");
-        string memory name = string.concat("alice.", PARENT, ".eth");
+        string memory name = _name("alice");
 
-        assertEq(_addr(name), alice, "addr");
+        assertEq(_addr(name), alice, "addr (coin 60)");
+        assertEq(_addrOn(name, COIN_TYPE_BASE_SEPOLIA), abi.encodePacked(alice), "addr on Base Sepolia (ENSIP-19 default)");
         assertEq(_text(name, "rentouts.credential"), "tenant/v1");
         assertEq(_text(name, "rentouts.status"), "active");
         assertEq(subnames.nameOf(alice), name);
@@ -110,6 +124,21 @@ contract RentoutsSubnamesForkTest is Test {
         assertEq(registry.getOwner(_id("alice")), alice);
         assertEq(registry.ownerOf(tokenId), alice);
         assertEq(registry.getResolver("alice"), address(resolver));
+    }
+
+    function test_CredentialNeverExpires() public {
+        _claim(alice, "alice");
+        assertEq(registry.getExpiry(_id("alice")), type(uint64).max);
+        // Past the parent's own 1-year expiry the UR stops resolving the whole subtree (the intended
+        // bound), but the credential itself never lapses: it is still owned and still revocable.
+        vm.warp(block.timestamp + 10 * YEAR);
+        assertEq(registry.getOwner(_id("alice")), alice);
+        vm.prank(issuer);
+        subnames.revoke("alice", "still revocable later");
+        bytes memory status = resolver.resolve(
+            subnames.dnsName("alice"), abi.encodeCall(ITextResolver.text, (bytes32(0), "rentouts.status"))
+        );
+        assertEq(abi.decode(status, (string)), "revoked");
     }
 
     // ------------------------------------------------------------------ claim rules
@@ -124,7 +153,7 @@ contract RentoutsSubnamesForkTest is Test {
     function test_DuplicateLabelReverts() public {
         _claim(alice, "alice");
         vm.prank(bob);
-        vm.expectRevert(); // ENS: LabelAlreadyRegistered("alice")
+        vm.expectRevert(abi.encodeWithSelector(RentoutsSubnames.LabelTaken.selector, "alice"));
         subnames.register("alice", bob);
     }
 
@@ -135,15 +164,24 @@ contract RentoutsSubnamesForkTest is Test {
 
         vm.prank(issuer);
         subnames.register("bob", bob);
-        assertEq(_addr(string.concat("bob.", PARENT, ".eth")), bob);
+        assertEq(_addr(_name("bob")), bob);
     }
 
     function test_LabelValidation() public {
-        string[6] memory bad = ["ab", "Alice", "-abc", "abc-", "a_bc", "abcdefghijklmnopqrstuvwxyz0123456"];
+        string[8] memory bad =
+            ["ab", "Alice", "-abc", "abc-", "a_bc", "abcdefghijklmnopqrstuvwxyz0123456", "ab--cd", "xn--abc"];
         for (uint256 i; i < bad.length; ++i) {
             vm.prank(alice);
             vm.expectRevert(abi.encodeWithSelector(RentoutsSubnames.InvalidLabel.selector, bad[i]));
             subnames.register(bad[i], alice);
+        }
+        // Accepted edge cases (all ENSIP-15 normalized).
+        string[4] memory good = ["a-b", "abc--d", "123", "abcdefghijklmnopqrstuvwxyz012345"];
+        for (uint256 i; i < good.length; ++i) {
+            address who = makeAddr(string.concat("rentouts.test.good.", good[i]));
+            vm.prank(who);
+            subnames.register(good[i], who);
+            assertEq(_addr(_name(good[i])), who);
         }
     }
 
@@ -151,18 +189,39 @@ contract RentoutsSubnamesForkTest is Test {
 
     function test_SoulboundTransferReverts() public {
         uint256 tokenId = _claim(alice, "alice");
+        assertFalse(registry.isEmancipated(), "registry root keeps UNREGISTER => revocable");
+
+        // The real soulbound gate: no ROLE_CAN_TRANSFER_ADMIN on the token.
         vm.prank(alice);
-        vm.expectRevert(); // ENS: TransferDisallowed(tokenId, alice)
+        vm.expectRevert(abi.encodeWithSignature("TransferDisallowed(uint256,address)", tokenId, alice));
+        registry.unsafeTransfer(bob, tokenId, "");
+
+        // ERC-1155 safe transfers are refused outright while the registry is not emancipated.
+        vm.prank(alice);
+        vm.expectRevert(TRANSFER_UNSAFE);
         registry.safeTransferFrom(alice, bob, tokenId, 1, "");
+
         assertEq(registry.getOwner(_id("alice")), alice);
+    }
+
+    /// Positive control: the same registry DOES move a token that was granted ROLE_CAN_TRANSFER_ADMIN,
+    /// so test_SoulboundTransferReverts would fail if RentoutsSubnames ever granted it.
+    function test_TransferableControlProvesTheGate() public {
+        vm.prank(deployer);
+        uint256 tokenId = registry.register(
+            "movable", alice, address(0), address(resolver), RegistryRoles.ROLE_CAN_TRANSFER_ADMIN, type(uint64).max
+        );
+        vm.prank(alice);
+        registry.unsafeTransfer(bob, tokenId, "");
+        assertEq(registry.getOwner(_id("movable")), bob);
     }
 
     function test_HolderCannotDetachOrBurnCredential() public {
         _claim(alice, "alice");
         vm.startPrank(alice);
-        vm.expectRevert();
+        vm.expectPartialRevert(EAC_UNAUTHORIZED);
         registry.setResolver(_id("alice"), mallory);
-        vm.expectRevert();
+        vm.expectPartialRevert(EAC_UNAUTHORIZED);
         registry.unregister(_id("alice"));
         vm.stopPrank();
         assertEq(registry.getResolver("alice"), address(resolver));
@@ -173,26 +232,41 @@ contract RentoutsSubnamesForkTest is Test {
     function test_IssuerKeyScopedRoleIsEnforcedByENS() public {
         _claim(alice, "alice");
         bytes memory dns = subnames.dnsName("alice");
-        string memory name = string.concat("alice.", PARENT, ".eth");
 
         vm.prank(issuer);
         resolver.setText(dns, "rentouts.onTimeRate", "100");
-        assertEq(_text(name, "rentouts.onTimeRate"), "100");
+        assertEq(_text(_name("alice"), "rentouts.onTimeRate"), "100");
 
         vm.prank(issuer); // same issuer, key it was not granted
-        vm.expectRevert();
+        vm.expectPartialRevert(EAC_UNAUTHORIZED);
         resolver.setText(dns, "avatar", "https://evil.example/x.png");
 
         vm.prank(alice); // the holder cannot forge her own credential
-        vm.expectRevert();
+        vm.expectPartialRevert(EAC_UNAUTHORIZED);
         resolver.setText(dns, "rentouts.onTimeRate", "100");
+    }
+
+    function test_RemovingIssuerRevokesResolverRole() public {
+        _claim(alice, "alice");
+        bytes memory dns = subnames.dnsName("alice");
+        vm.startPrank(deployer); // what script phase removeIssuer() does
+        subnames.setIssuer(issuer, false);
+        resolver.revokeRoles(uint256(keccak256("rentouts.onTimeRate")), ResolverRoles.ROLE_SET_TEXT, issuer);
+        vm.stopPrank();
+
+        vm.prank(issuer);
+        vm.expectPartialRevert(EAC_UNAUTHORIZED);
+        resolver.setText(dns, "rentouts.onTimeRate", "0");
+        vm.prank(issuer);
+        vm.expectRevert(RentoutsSubnames.NotIssuer.selector);
+        subnames.setCredential("alice", "rentouts.onTimeRate", "0");
     }
 
     function test_SetCredentialViaContract() public {
         _claim(alice, "alice");
         vm.prank(issuer);
         subnames.setCredential("alice", "rentouts.leasesCompleted", "3");
-        assertEq(_text(string.concat("alice.", PARENT, ".eth"), "rentouts.leasesCompleted"), "3");
+        assertEq(_text(_name("alice"), "rentouts.leasesCompleted"), "3");
 
         vm.prank(mallory);
         vm.expectRevert(RentoutsSubnames.NotIssuer.selector);
@@ -201,6 +275,10 @@ contract RentoutsSubnamesForkTest is Test {
         vm.prank(issuer);
         vm.expectRevert(abi.encodeWithSelector(RentoutsSubnames.NotCredentialKey.selector, "avatar"));
         subnames.setCredential("alice", "avatar", "x");
+
+        vm.prank(issuer);
+        vm.expectRevert(abi.encodeWithSelector(RentoutsSubnames.NotCredentialKey.selector, "rentouts."));
+        subnames.setCredential("alice", "rentouts.", "x");
 
         vm.prank(issuer);
         vm.expectRevert(abi.encodeWithSelector(RentoutsSubnames.UnknownLabel.selector, "nobody"));
@@ -213,7 +291,7 @@ contract RentoutsSubnamesForkTest is Test {
 
         vm.prank(alice);
         subnames.setProfileText("alice", "description", "Tokyo renter");
-        assertEq(_text(string.concat("alice.", PARENT, ".eth"), "description"), "Tokyo renter");
+        assertEq(_text(_name("alice"), "description"), "Tokyo renter");
 
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(RentoutsSubnames.ProfileKeyNotAllowed.selector, "rentouts.rating"));
@@ -226,9 +304,16 @@ contract RentoutsSubnamesForkTest is Test {
 
     // ------------------------------------------------------------------ revoke
 
-    function test_RevokeBurnsClearsAndRetires() public {
+    function test_RevokeWipesRecordsBurnsAndRetires() public {
         uint256 tokenId = _claim(alice, "alice");
-        string memory name = string.concat("alice.", PARENT, ".eth");
+        string memory name = _name("alice");
+        vm.prank(issuer);
+        subnames.setCredential("alice", "rentouts.leasesCompleted", "3");
+        bytes memory dns = subnames.dnsName("alice"); // compute before vm.prank (prank hits the next call)
+        vm.prank(issuer);
+        resolver.setText(dns, "rentouts.onTimeRate", "100");
+        vm.prank(alice);
+        subnames.setProfileText("alice", "description", "Tokyo renter");
 
         vm.prank(mallory);
         vm.expectRevert(RentoutsSubnames.NotIssuer.selector);
@@ -239,9 +324,16 @@ contract RentoutsSubnamesForkTest is Test {
 
         assertEq(registry.getOwner(_id("alice")), address(0), "token burned");
         assertEq(registry.ownerOf(tokenId), address(0));
-        // Resolution now falls back to the parent's (shared) resolver, which returns the cleared records.
-        assertEq(_addr(name), address(0), "addr cleared");
+        // Resolution now falls back to the parent's (shared) resolver: every old record must be gone.
+        assertEq(_addr(name), address(0), "addr wiped");
+        assertEq(_addrOn(name, COIN_TYPE_BASE_SEPOLIA).length, 0, "base addr wiped");
         assertEq(_text(name, "rentouts.status"), "revoked");
+        assertEq(_text(name, "rentouts.credential"), "", "credential wiped");
+        assertEq(_text(name, "rentouts.leasesCompleted"), "", "contract-written stat wiped");
+        assertEq(_text(name, "rentouts.onTimeRate"), "", "issuer-written stat wiped");
+        assertEq(_text(name, "description"), "", "profile wiped");
+        // The parent's own records are untouched.
+        assertEq(_text(string.concat(PARENT, ".eth"), "url"), "https://rentouts.co");
         assertEq(subnames.labelOf(alice), "");
         assertTrue(subnames.retired(_id("alice")));
 
@@ -250,7 +342,41 @@ contract RentoutsSubnamesForkTest is Test {
         subnames.register("alice", bob);
 
         _claim(alice, "alice-2"); // the person can still get a fresh credential
-        assertEq(_addr(string.concat("alice-2.", PARENT, ".eth")), alice);
+        assertEq(_addr(_name("alice-2")), alice);
+    }
+
+    /// A redeployed RentoutsSubnames on the same registry can't see the old `retired` map, but must
+    /// still refuse labels the previous deployment revoked (they'd inherit nothing, but it's single-use).
+    function test_RevokedLabelBlockedAcrossRedeploy() public {
+        _claim(alice, "alice");
+        vm.prank(issuer);
+        subnames.revoke("alice", "fraud");
+
+        vm.startPrank(deployer);
+        RentoutsSubnames v2 = _deploySubnames();
+        vm.stopPrank();
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(RentoutsSubnames.LabelTaken.selector, "alice"));
+        v2.register("alice", bob);
+    }
+
+    // ------------------------------------------------------------------ admin
+
+    function test_AdminFunctions() public {
+        vm.prank(mallory);
+        vm.expectRevert(RentoutsSubnames.NotAdmin.selector);
+        subnames.setIssuer(mallory, true);
+
+        vm.prank(deployer);
+        vm.expectRevert(abi.encodeWithSelector(RentoutsSubnames.NotCredentialKey.selector, "rentouts.rating"));
+        subnames.setProfileKey("rentouts.rating", true);
+
+        vm.prank(deployer);
+        subnames.transferAdmin(bob);
+        assertEq(subnames.admin(), bob);
+        vm.prank(deployer);
+        vm.expectRevert(RentoutsSubnames.NotAdmin.selector);
+        subnames.setIssuer(deployer, false);
     }
 
     // ------------------------------------------------------------------ handoff §10.1: wildcard shortcut
@@ -261,7 +387,7 @@ contract RentoutsSubnamesForkTest is Test {
         bytes memory dns = subnames.dnsName("ghost");
         vm.prank(deployer);
         resolver.setText(dns, "url", "https://rentouts.co/ghost");
-        assertEq(_text(string.concat("ghost.", PARENT, ".eth"), "url"), "https://rentouts.co/ghost");
+        assertEq(_text(_name("ghost"), "url"), "https://rentouts.co/ghost");
     }
 
     // ------------------------------------------------------------------ helpers
@@ -271,6 +397,10 @@ contract RentoutsSubnamesForkTest is Test {
         tokenId = subnames.register(label, who);
     }
 
+    function _name(string memory label) internal pure returns (string memory) {
+        return string.concat(label, ".", PARENT, ".eth");
+    }
+
     function _id(string memory label) internal pure returns (uint256) {
         return uint256(keccak256(bytes(label)));
     }
@@ -278,6 +408,12 @@ contract RentoutsSubnamesForkTest is Test {
     function _addr(string memory name) internal view returns (address) {
         (bytes memory result,) = ur.resolve(_dns(name), abi.encodeCall(IAddrResolver.addr, (_namehash(name))));
         return abi.decode(result, (address));
+    }
+
+    function _addrOn(string memory name, uint256 coinType) internal view returns (bytes memory) {
+        (bytes memory result,) =
+            ur.resolve(_dns(name), abi.encodeCall(IAddressResolver.addr, (_namehash(name), coinType)));
+        return abi.decode(result, (bytes));
     }
 
     function _text(string memory name, string memory key) internal view returns (string memory) {
