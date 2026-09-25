@@ -17,12 +17,14 @@ Running, timestamped log of the ENS track (owner: Bektur), updated as we go. Tim
 | `UserRegistry` (proxy) | [`0xD2D122000D4725a863376EcAe4220BC20590f382`](https://sepolia.etherscan.io/address/0xD2D122000D4725a863376EcAe4220BC20590f382) |
 | `RentoutsSubnames` | [`0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60`](https://eth-sepolia.blockscout.com/address/0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60) — source verified (Sourcify `exact_match`, Blockscout) |
 | Deployer / admin (keystore `rentouts-deployer`) | `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE` |
-| Issuer (keystore `rentouts-issuer`) | `0xF6048B190D178Fb6F0870c65CD2F7E06381713C4` — key-scoped `SET_TEXT` on the six `rentouts.*` keys (target: only `onTimeRate`, `rating`, `verified`; the three escrow-derived grants are revoked by re-running `subnames`, see 23:05), **no** root resolver roles |
+| `CredentialSync` | [`0xd0783EC7B0668652718f3977Ca92235fe6bF9c56`](https://eth-sepolia.blockscout.com/address/0xd0783EC7B0668652718f3977Ca92235fe6bF9c56) — live Sat 03:08, issuer on `RentoutsSubnames`, reads `RentEscrow`; source verified (Sourcify `exact_match`, Blockscout) |
+| Escrow stack (`feat/ai-judge`) | `RentEscrow` [`0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18`](https://eth-sepolia.blockscout.com/address/0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18) (Circle USDC), `AIArbiter` `0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5`, `HumanGate` `0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd`, `LeaseShare1155` `0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09`; all source verified (see Sat 03:05 and 03:15) |
+| Issuer (keystore `rentouts-issuer`) | `0xF6048B190D178Fb6F0870c65CD2F7E06381713C4` — key-scoped `SET_TEXT` on `rentouts.onTimeRate`, `rating`, `verified` only (the three escrow-derived grants were revoked Sat 03:09; `roles()` is 0 on all five derived keys), **no** root resolver roles |
 | Demo holder (keystore `rentouts-alice`) | `0x484811c8c967809bE644A89d677933c29fb9e936` → **`alice.rentouts.eth`** ✅ |
 | Parent records | `addr` = `0x7ed696c879a1a7FD2eD3b49d9982E634a8647eb1` (RentOuts' published address), `url` = `https://rentouts.co`, `email` = `partners@rentouts.co`, `com.twitter` = `RentOuts`, `description` |
 | Machine-readable | [`ens/deployments/sepolia.json`](../../ens/deployments/sepolia.json) |
 | Gate | ✅ **passed Fri 22:24** (`alice.rentouts.eth` resolves `addr` + `rentouts.credential`) |
-| Next | `CredentialSync` (on-chain, permissionless), `app/`, ENS writeup — see 22:40 entry |
+| Next | first live `sync` (alice after a demo lease), `app/` ENS claim + profile card, ENS writeup, Etherscan verification (needs an API key) |
 
 ---
 
@@ -68,7 +70,7 @@ Running, timestamped log of the ENS track (owner: Bektur), updated as we go. Tim
 | register | `mint` / `approve` (ENS MockUSDC fee) | [`0x6b4ac086…6a28`](https://sepolia.etherscan.io/tx/0x6b4ac0860c56321fe67e929cb21840a701748f9af71d8bbfd72fc52d252a6a28), [`0xb56bbb51…b8c8`](https://sepolia.etherscan.io/tx/0xb56bbb51ed4ad42b034a8d69db69abb1524bb5cae16d39ad7c502c5394a8b8c8) |
 | register | `register` → **rentouts.eth** | [`0x7100160a…ca7b`](https://sepolia.etherscan.io/tx/0x7100160abf684418f7c00b60e3a839662c6de1cae1db2bf57cd59210f125ca7b) |
 | subnames | deploy `RentoutsSubnames` | [`0xf7440fd5…6bba`](https://sepolia.etherscan.io/tx/0xf7440fd589ab000785dc898b8b8a7958668db779bf65241bc63ed76e56d96bba) |
-| subnames | 2× `grantRootRoles`, `setIssuer`, 6× `grantSetterRoles` | see `ens/broadcast/DeployEns.s.sol/11155111/subnames-latest.json` |
+| subnames | 2× `grantRootRoles`, `setIssuer`, 6× `grantSetterRoles` | see `ens/broadcast/DeployEns.s.sol/11155111/run-1790342293969.json` (`subnames-latest.json` now holds the Sat 03:09 cleanup) |
 | profile | `setAddress` + 4× `setText` | see `profile-latest.json` |
 
 **22:20 — Verified independently on-chain.**
@@ -116,15 +118,48 @@ Running, timestamped log of the ENS track (owner: Bektur), updated as we go. Tim
 - **Rehearsed with `ens.sh` on an anvil fork of Sepolia** (impersonated deployer, stub escrows). credentialSync fresh, then reuse (no txs), then replace (old revoked, finalized). `subnames` sent exactly the 3 `revokeRoles` of the pending cleanup. `removeIssuer` worked, then `subnames` refused. Committed receipts and `sepolia.json` untouched. A live **dry run** of `subnames` still simulates exactly those 3 `revokeRoles`.
 - **README:** new "Known limitations and operations" section. It covers revoke-not-ban, issuer key roles being resolver-global (apps check `status == active`, `addr` and `labelOf`), the admin handover runbook, the deployer's proxy upgrade roles (to a Safe later) and one state file per parent.
 
+**03:05–03:09 — Escrow stack and `CredentialSync` live on Ethereum Sepolia (Bektur ran the deploys).** 11 txs, all `status 0x1`, about 0.0062 ETH in total (the ENS part: 5 txs, 0.00105 ETH). The escrow stack comes from `feat/ai-judge` (`DeployAIArbiter.s.sol`, then `DeployEscrow.s.sol`); its addresses are in that branch's `deployments.json` (`sepolia`, `sepoliaAIArbiter`).
+
+| Contract | Address | Deploy tx | Wiring |
+|---|---|---|---|
+| `AIArbiter` | [`0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5`](https://eth-sepolia.blockscout.com/address/0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5) | [`0xc82a9176…977a`](https://sepolia.etherscan.io/tx/0xc82a9176171588129ef6244ab9f655b39319a661456d0daedbf7d7673b47977a) | agent `0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA`, human `0x798b01Cef62b889943Ce1D3C5011a755B297e486`, challenge window 120 s; `bindEscrow(RentEscrow)` sent by the human: [`0xe4771261…b875`](https://sepolia.etherscan.io/tx/0xe47712614a63eec77c960c9f27cd31ed34de7d2e7bc3a4b0098172195088b875) |
+| `LeaseShare1155` | [`0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09`](https://eth-sepolia.blockscout.com/address/0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09) | [`0x05ce482f…f64b`](https://sepolia.etherscan.io/tx/0x05ce482f57de77b09f73efed346c889b0f6012c3a0b426f8bc76abf7e124f64b) | owner = deployer, deployer allowlisted, minter = `RentEscrow` (`setMinter` [`0xc0d8b854…9f84`](https://sepolia.etherscan.io/tx/0xc0d8b854aad94e8fd1cab7488c2e3f29390aa5af2d5127dd2236298534149f84)) |
+| `HumanGate` | [`0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd`](https://eth-sepolia.blockscout.com/address/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) | [`0x2351a01f…c232`](https://sepolia.etherscan.io/tx/0x2351a01fdc504feeb7bd8026029c287765e16568aa8370431a498e089e89c232) | owner = deployer, verifier `0x0` = open (World gate on hold) |
+| `RentEscrow` | [`0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18`](https://eth-sepolia.blockscout.com/address/0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18) | [`0xf8b1d3c0…8f00`](https://sepolia.etherscan.io/tx/0xf8b1d3c05a146a85205a215e96e3c3c1eb20015db12323cdc7013eae795c8f00) | token = Circle USDC `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`, arbiter = `AIArbiter`, `humanGate`, `leaseShare` |
+| `CredentialSync` | [`0xd0783EC7B0668652718f3977Ca92235fe6bF9c56`](https://eth-sepolia.blockscout.com/address/0xd0783EC7B0668652718f3977Ca92235fe6bF9c56) | [`0x47fc7cc4…422c`](https://sepolia.etherscan.io/tx/0x47fc7cc42a2b0d35de69f00019f80840618f1778f759b21d21cdfbeebcdb422c) | escrow = `RentEscrow`, subnames = `RentoutsSubnames`; `setIssuer(CredentialSync, true)` [`0x5f9d8b78…2ee4`](https://sepolia.etherscan.io/tx/0x5f9d8b786cbd15a7337cc754ceb6964723f4494bb00ffa3d107c98dbb2612ee4) |
+
+Deployer for all of them: `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE`.
+- **`credentialSync` phase** (`ESCROW_ADDRESS=0x2357…cd18 BROADCAST=true ./scripts/ens.sh credentialSync`): deploy at block 11780915 (03:08:12), then `setIssuer`. `finalize` wrote `credentialSync` and `escrow` to `ens/deployments/sepolia.json`; no `pending*` fields are left. Receipts: `ens/broadcast/DeployEns.s.sol/11155111/credentialSync-latest.json` = `run-1790359704652.json`.
+- **Issuer cleanup** (`BROADCAST=true ./scripts/ens.sh subnames`, 03:09:12): exactly the 3 `revokeRoles(keccak256(key), ROLE_SET_TEXT = 16, issuer)` txs on the `PermissionedResolver`, nothing else. `rentouts.leasesCompleted` [`0x7e1373ad…47bf`](https://sepolia.etherscan.io/tx/0x7e1373adb27cfc551b9844d3122958b1e1fbbadedde07072cdb35c644d6247bf), `rentouts.disputes` [`0xa79c86c9…c06c`](https://sepolia.etherscan.io/tx/0xa79c86c93083d5d0d1550a4839241dd84b42a339bc3fdc6b7ad877caf46cc06c), `rentouts.escrow` [`0x6f3603dc…b0bd`](https://sepolia.etherscan.io/tx/0x6f3603dc5544747bbcb4702af27a8c4bf336f978badacc4a05a773c2fd90b0bd). `rentPaid` and `depositReturnRate` were never granted. Receipts: `subnames-latest.json` = `run-1790359754352.json`.
+- **Checked read-only afterwards:** `roles(keccak256(key), issuer)` is `0` for all five escrow-derived keys and `16` for `onTimeRate`, `rating` and `verified`. `RentoutsSubnames.isIssuer(CredentialSync)` is `true`. `CredentialSync.escrow()` and `subnames()` are the addresses above, and `escrowAccountId()` = `eip155:11155111:0x2357705a8382067d9be9dada2eef70e23fa4cd18`. `labelOf(alice)` is still `alice`. The wiring of the whole stack was also checked read-only: 27/27.
+- `forge test` in `ens/`: 42/42 against live Sepolia.
+- **The live `RentEscrow` already has the new dispute accounting.** Its tenant payout first refunds rent that wasn't earned yet, and only the rest counts as deposit returned. So a ruling that refunds unused rent but keeps the deposit records 0 returned (confirmed in the Sourcify-verified source). The `depositReturnRate` caveat in `ens/README.md` now describes this rule, and the open item is closed.
+
+**03:15 — All five new contracts source-verified on Sourcify and Blockscout.** Both are keyless, and both show an exact match.
+- Before submitting, both projects were rebuilt, and each contract's creation bytecode was compared byte for byte with the input of its deploy tx. All five match, including the metadata hash. The constructor args match `cast abi-encode` of the broadcast arguments. Settings: the four escrow-stack contracts use solc 0.8.24, cancun, optimizer 200, no via-IR. `CredentialSync` uses solc 0.8.28, cancun, optimizer 200.
+- Sourcify v2 API: `match`, `creationMatch` and `runtimeMatch` are all `exact_match`. Blockscout v2 API: `is_fully_verified = true` with the right compiler; Blockscout picked the sources up from Sourcify within seconds.
+
+| Contract | Sourcify | Blockscout | Etherscan |
+|---|---|---|---|
+| `AIArbiter` | `exact_match` | fully verified | not verified |
+| `LeaseShare1155` | `exact_match` (already verified at 18:07Z, before this run) | fully verified | not verified |
+| `HumanGate` | `exact_match` | fully verified | not verified |
+| `RentEscrow` | `exact_match` | fully verified | not verified |
+| `CredentialSync` | `exact_match` | fully verified | not verified |
+
+Sourcify pages: `https://repo.sourcify.dev/11155111/<address>`. Etherscan needs an `ETHERSCAN_API_KEY`, which wasn't used here (open item).
+
 ---
 
 ## Open items
 
-- [ ] Core escrow (`feat/core-escrow`): `resolveDispute` counts the tenant's dispute share as deposit returned before unreleased prepaid rent, which inflates `rentouts.depositReturnRate` (review repro: landlord kept the whole deposit, rate showed `29`). The ENS README documents the current rule. If core changes the attribution, drop that caveat from the records table.
-- [ ] Broadcast the issuer role cleanup (Bektur, deployer keystore): `BROADCAST=true ./scripts/ens.sh subnames`. Then confirm that `roles(keccak256("rentouts.leasesCompleted"), issuer)` returns 0.
+- [x] Core escrow: dispute rulings inflated `rentouts.depositReturnRate` (the tenant's share counted as deposit returned before unearned rent). Fixed in the live `RentEscrow` (unearned rent is refunded first); the README caveat now describes the new rule (Sat 03:05).
+- [x] Broadcast the issuer role cleanup: 3 `revokeRoles`, Sat 03:09. `roles()` is 0 on all five escrow-derived keys.
+- [ ] Etherscan verification of the five new contracts (Bektur, needs `ETHERSCAN_API_KEY`): `forge verify-contract <address> <Contract> --chain sepolia --verifier etherscan --constructor-args <hex> --watch`, run in the project that built it (escrow stack: `feat/ai-judge`; `CredentialSync`: `ens/`), with the constructor args from the deploy tx. Sourcify and Blockscout are done.
+- [ ] First live `sync`: after alice's demo lease closes, call `CredentialSync.sync(alice)` and read `rentouts.leasesCompleted` / `rentouts.escrow` back through the Universal Resolver.
 
 - [x] Claim `alice.rentouts.eth` → **gate** (22:24).
-- [ ] `CredentialSync` (replaces the off-chain relayer): permissionless `sync(tenant)` reads `RentEscrow.tenantStats` and writes `rentouts.*` via `RentoutsSubnames` (made an issuer). Built and tested; deploy once `RentEscrow` is live: `ESCROW_ADDRESS=<RentEscrow> BROADCAST=true ./scripts/ens.sh credentialSync`. It finalizes the state file itself; if it stops half way, re-run it.
+- [x] `CredentialSync` (replaces the off-chain relayer): live at `0xd0783EC7B0668652718f3977Ca92235fe6bF9c56` (Sat 03:08), issuer on `RentoutsSubnames`, reads `RentEscrow` `0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18`.
 - [ ] Later (post-hackathon): hand the `RentoutsSubnames` admin and both proxies' root roles to a Safe, following the handover runbook in `ens/README.md`.
 - [ ] `app/src/lib/ens.ts`: claim step (`simulateContract` for availability, `labelOf(account)` on connect, `normalize()`), profile card (show `rentouts.*` only when `status == active` and `addr` matches).
 - [ ] ENS section of README + `FEEDBACK.md`; paste the exact Tokyo ENS prize text into `docs/ens/PRIZE.md`.

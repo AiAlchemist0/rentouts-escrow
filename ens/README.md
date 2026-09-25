@@ -29,7 +29,7 @@ overwrite them while they hold issuer status (see the trust model below).
 | `rentouts.leasesCompleted` | `CredentialSync.sync`, from `tenantStats.leasesCompleted` (closed without a dispute) | `3` |
 | `rentouts.disputes` | `CredentialSync.sync`, from `tenantStats.leasesDisputed` | `0` |
 | `rentouts.rentPaid` | `CredentialSync.sync`, from `tenantStats.rentPaid`: USDC (6 decimals) written with 2 decimals, rounded down | `1250.00` |
-| `rentouts.depositReturnRate` | `CredentialSync.sync`: `depositsReturned * 100 / depositsPosted`, whole percent, rounded down, capped at 100. `n/a` until a lease with a deposit has ended. For a lease that ended in a dispute, the escrow counts the tenant's share of everything still escrowed (deposit plus unreleased prepaid rent), capped at the deposit, as returned. So a refund of prepaid rent raises the rate even when the landlord kept the deposit | `100`, `50`, `n/a` |
+| `rentouts.depositReturnRate` | `CredentialSync.sync`: `depositsReturned * 100 / depositsPosted`, whole percent, rounded down, capped at 100. `n/a` until a lease with a deposit has ended. For a lease that ended in a dispute, the escrow's tenant payout first refunds rent not yet earned when the dispute opened; only what is left, capped at the deposit, counts as returned. So a ruling that refunds unused rent but keeps the deposit counts 0 returned | `100`, `50`, `n/a` |
 | `rentouts.escrow` | `CredentialSync.sync`: CAIP-10 id of the escrow the stats come from | `eip155:11155111:0x…` (lowercase) |
 | `rentouts.onTimeRate`, `rentouts.rating`, `rentouts.verified` | issuer EOA (key-scoped EAC role on the resolver, or `setCredential`): judgments the escrow can't derive | `100`, `5`, `true` |
 | `avatar`, `description`, `url`, `com.twitter`, `com.github` | holder via `setProfileText` | … |
@@ -67,13 +67,15 @@ cp .env.example .env                         # then fill DEPLOYER, ENS_ISSUER (a
 ./scripts/ens.sh status                      # read-only
 BROADCAST=true ./scripts/ens.sh all          # parent -> subnames -> profile -> claim (asks for the keystore password)
 
-# once RentEscrow is deployed:
-ESCROW_ADDRESS=0x... BROADCAST=true ./scripts/ens.sh credentialSync   # deploy/reuse CredentialSync, make it an issuer, record it
 ENS_SYNC_TENANT=0x... BROADCAST=true ./scripts/ens.sh sync            # refresh one tenant's records
+# only when the escrow changes (for the recorded escrow it reuses the live contract and sends nothing):
+ESCROW_ADDRESS=0x... BROADCAST=true ./scripts/ens.sh credentialSync   # deploy/reuse CredentialSync, make it an issuer, record it
 ```
 
+**Live on Sepolia (2026-09-26):** `CredentialSync` [`0xd0783EC7B0668652718f3977Ca92235fe6bF9c56`](https://eth-sepolia.blockscout.com/address/0xd0783EC7B0668652718f3977Ca92235fe6bF9c56) reads `RentEscrow` [`0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18`](https://eth-sepolia.blockscout.com/address/0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18) and is an issuer on `RentoutsSubnames`. Both are source verified on Sourcify and Blockscout. All addresses are in [`deployments/sepolia.json`](./deployments/sepolia.json).
+
 `sync` is permissionless, so any wallet can also call it directly:
-`cast send <credentialSync> "sync(address)" <tenant> --account <you> --rpc-url $SEPOLIA_RPC_URL`.
+`cast send 0xd0783EC7B0668652718f3977Ca92235fe6bF9c56 "sync(address)" <tenant> --account <you> --rpc-url $SEPOLIA_RPC_URL`.
 Pass `ESCROW_ADDRESS` / `ENS_SYNC_TENANT` inline or in `.env`, not both: `.env` is sourced last and wins.
 
 Signing uses a Foundry keystore account (`rentouts-deployer` by default). No private keys go in `.env` or on the command line.
@@ -101,11 +103,11 @@ The `credentialSync` phase is safe to re-run:
 
 **Trust model.** The escrow-derived keys are verifiable, but not write-protected against RentOuts issuers:
 - Any `RentoutsSubnames` issuer, including the issuer EOA, can call `setCredential` on any `rentouts.*` key, so it can overwrite these records until the admin removes it (`removeIssuer`).
-- On the resolver itself, the `subnames` phase gives the issuer EOA key-scoped roles for `rentouts.onTimeRate`, `rentouts.rating` and `rentouts.verified` only. It revokes any role the issuer EOA holds on an escrow-derived key. The first live deploy granted `rentouts.leasesCompleted`, `rentouts.disputes` and `rentouts.escrow`. Re-running `BROADCAST=true ./scripts/ens.sh subnames` once removes them (3 `revokeRoles` txs; the other steps are skipped). The same fix with cast, per key: `cast send <resolver> "revokeRoles(uint256,uint256,address)" $(cast keccak rentouts.leasesCompleted) 16 <issuer> --account rentouts-deployer --rpc-url $SEPOLIA_RPC_URL`.
+- On the resolver itself, the `subnames` phase gives the issuer EOA key-scoped roles for `rentouts.onTimeRate`, `rentouts.rating` and `rentouts.verified` only. It revokes any role the issuer EOA holds on an escrow-derived key. The first live deploy granted `rentouts.leasesCompleted`, `rentouts.disputes` and `rentouts.escrow`; re-running `subnames` on 2026-09-26 revoked them (3 `revokeRoles` txs). Check any key with `cast call <resolver> "roles(uint256,address)(uint256)" $(cast keccak rentouts.leasesCompleted) <issuer> --rpc-url $SEPOLIA_RPC_URL`: `0` for the five escrow-derived keys, `16` (`SET_TEXT`) for the three judged ones.
 
 The values are a pure function of public escrow state, though. Anyone can call `sync` to restore them (tested), and an app can compare them with `escrow.tenantStats(tenant)` before showing them.
 
-This is testnet only: Ethereum Sepolia and Circle's test USDC. The escrow's dispute arbiter is a single EOA for the hackathon; production would use a Safe.
+This is testnet only: Ethereum Sepolia and Circle's test USDC. The live escrow's dispute arbiter is the `AIArbiter` contract: an AI agent proposes a split, the parties can appeal within a 120 s window, and a human key has the last word. Both keys are single EOAs for the hackathon; production would use a Safe for the human.
 
 ## Notes
 

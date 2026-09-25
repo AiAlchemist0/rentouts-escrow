@@ -59,9 +59,11 @@ Tenants get a soulbound `<name>.rentouts.eth` subname on the ENSv2 beta. Its `re
 | `rentouts.eth` resolver (`PermissionedResolver`) | [`0xBB8A105f48Ac836F549eC0B6A1a45BB7BA0961E5`](https://sepolia.etherscan.io/address/0xBB8A105f48Ac836F549eC0B6A1a45BB7BA0961E5) |
 | Subname registry (`UserRegistry`) | [`0xD2D122000D4725a863376EcAe4220BC20590f382`](https://sepolia.etherscan.io/address/0xD2D122000D4725a863376EcAe4220BC20590f382) |
 | `RentoutsSubnames` | [`0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60`](https://sepolia.etherscan.io/address/0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60) |
+| `CredentialSync` (permissionless `sync(tenant)`) | [`0xd0783EC7B0668652718f3977Ca92235fe6bF9c56`](https://eth-sepolia.blockscout.com/address/0xd0783EC7B0668652718f3977Ca92235fe6bF9c56) |
+| `RentEscrow` it reads from | [`0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18`](https://eth-sepolia.blockscout.com/address/0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18) |
 | Demo credential | `alice.rentouts.eth` |
 
-`CredentialSync` is not deployed yet: it needs the RentEscrow address. Addresses for the app: [`ens/deployments/sepolia.json`](./ens/deployments/sepolia.json).
+`RentoutsSubnames` and `CredentialSync` are source verified on Sourcify and Blockscout. Addresses for the app: [`ens/deployments/sepolia.json`](./ens/deployments/sepolia.json).
 
 ---
 
