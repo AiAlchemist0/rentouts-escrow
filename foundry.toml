@@ -11,8 +11,12 @@ remappings = [
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "forge-std/=lib/openzeppelin-contracts/lib/forge-std/src/",
 ]
-# script/DeployEscrow.s.sol records deployments/sepolia.json (only in a --broadcast / --resume run)
-fs_permissions = [{ access = "read-write", path = "./deployments" }]
+# script/DeployEscrow.s.sol records the "sepolia" entry of deployments.json (only in a --broadcast /
+# --resume run); test/DeployEscrow.t.sol checks that on a scratch copy under cache/.
+fs_permissions = [
+    { access = "read-write", path = "./deployments.json" },
+    { access = "read-write", path = "./cache/deploy-escrow-test" },
+]
 
 # RentEscrow invariant suite (test/RentEscrow.invariant.t.sol): the handler only makes valid
 # calls, so any revert is a bug.
