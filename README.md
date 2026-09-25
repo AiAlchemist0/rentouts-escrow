@@ -14,7 +14,7 @@
 | `src/RentEscrow.sol` | **Rental escrow** — holds the tenant's USDC deposit + prepaid rent, releases rent per period, returns the deposit; arbiter-split disputes |
 | `src/interfaces/IRentEscrow.sol` | Pinned escrow interface (lifecycle, events, errors, invariants) shared with the app and the ENS credential sync |
 | `src/HumanGate.sol`, `src/interfaces/IHumanGate.sol` | **Human gate** — the seam where World ID plugs in later: decides who may fund a new lease, never touches funds |
-| `test/RentEscrow.t.sol`, `test/RentEscrow.invariant.t.sol` | 47 unit/fuzz tests + a handler-based invariant suite (INV-1..INV-4) |
+| `test/RentEscrow.t.sol`, `test/RentEscrow.invariant.t.sol`, `test/RentEscrow.blacklist.t.sol` | 51 unit/fuzz tests (4 of them with a USDC-style blacklisting token) + a handler-based invariant suite (INV-1..INV-4) |
 | `test/HumanGate.t.sol` | 16 tests of the human gate: off, open, refusing, verifier swapped later on the same escrow, owner-only |
 | `script/DeployEscrow.s.sol` | Ethereum Sepolia deploy of RentEscrow + LeaseShare1155 + HumanGate (keystore signing) → `"sepolia"` entry of `deployments.json` |
 | `test/DeployEscrow.t.sol` | 15 tests of the deploy script's config checks, wiring and deployment record |
@@ -70,13 +70,13 @@ A handler runs random create / fund / warp / claim / close / dispute / resolve /
 ### Test
 
 ```bash
-forge test --match-path 'test/RentEscrow*' -vv   # 47 unit/fuzz tests + 4 invariants, ~2 s
+forge test --match-path 'test/RentEscrow*' -vv   # 51 unit/fuzz tests + 4 invariants, ~2 s
 forge test --match-path test/HumanGate.t.sol      # 16 human-gate tests
 forge test --match-path test/DeployEscrow.t.sol   # 15 deploy-script tests
-forge test                                        # everything, incl. the 12 LeaseShare1155 tests (91 total)
+forge test                                        # everything, incl. the 12 LeaseShare1155 tests (95 total)
 ```
 
-Unit tests cover every function and exact custom-error revert, partial / complete claims with `vm.warp`, the close grace rule, cancel, 0 / 5000 / 10000 bps splits (plus a fuzzed split), share minting and the non-allowlisted-landlord revert, re-entry through the ERC-1155 receive hook, the arbiter never being a party, and tenant-stats accounting (including how a dispute payout splits into refunded rent and returned deposit).
+Unit tests cover every function and exact custom-error revert, partial / complete claims with `vm.warp`, the close grace rule, cancel, 0 / 5000 / 10000 bps splits (plus a fuzzed split), share minting and the non-allowlisted-landlord revert, re-entry through the ERC-1155 receive hook, the arbiter never being a party, tenant-stats accounting (including how a dispute payout splits into refunded rent, returned deposit and rent paid), and the way out when USDC blacklists the landlord or the tenant.
 
 ### Deploy (Ethereum Sepolia)
 
@@ -116,6 +116,7 @@ Plugging World ID in later is one call from the gate owner, with no escrow redep
 - World ID is **not wired in yet**: the deployed `HumanGate` is open (verifier `0`) until a verifier is set. Its owner is the deployer EOA, who can then refuse funding of new leases (never touch existing ones).
 - Earned rent that nobody has claimed when a dispute opens (by either party) is part of the arbiter's pot: it is frozen until the ruling, and a ruling can move part of it to the tenant (for example an arbiter that rules in coarse steps, such as an AI judge's 25% steps). `claimRent` is open to anyone, so a landlord or keeper should claim as periods elapse. `tenantStats` counts only the rent that actually reaches the landlord.
 - Lease shares minted at `createLease` stay with the landlord if the lease is cancelled (`LeaseShare1155` has no burn).
+- Payouts are pushed, and USDC can blacklist addresses. If the landlord or the tenant is blacklisted, every call that pays them reverts, including the other party's `closeLease` and any split ruling. The other party can still `openDispute` (it moves no tokens), but only a 0 or 10000 bps ruling then pays out, which hands the blocked party's share to the other one (tested with a blacklisting mock). Pull payments (credit a failed transfer, add `withdraw`) would keep the agreed split; not done for the hackathon.
 - The token must be a plain ERC-20 (no fee-on-transfer or rebasing), which USDC is. With shares enabled, a contract landlord must implement `onERC1155Received`.
 
 ---
