@@ -28,7 +28,10 @@ export function manipulationIn(e: Pick<EvidenceItem, 'statement'>): boolean {
   return MANIPULATION_PATTERNS.some((re) => re.test(e.statement))
 }
 
-/** Abstain reasons that come from the statements themselves, whatever the model answered. */
+/**
+ * Abstain reasons that come from the statements themselves, whatever the model answered: a
+ * statement that tries to steer the judge, or a party that has posted nothing.
+ */
 export function screenReasons(input: DisputeInput): string[] {
   const reasons: string[] = []
   const flagged = input.evidence.filter(manipulationIn).map((e) => e.id)
@@ -36,6 +39,15 @@ export function screenReasons(input: DisputeInput): string[] {
     reasons.push(
       `statement${flagged.length > 1 ? 's' : ''} ${flagged.join(', ')} ${flagged.length > 1 ? 'try' : 'tries'} to instruct the judge, impersonate an authority or claim a prior decision`,
     )
+  }
+  // Silence is not an admission (prompt rule 4). A one-sided case goes to the human whatever the
+  // model answered, so a first mover cannot get a proposal out before the other side has posted.
+  const posted = new Set(input.evidence.map((e) => e.party))
+  const silent = (['tenant', 'landlord'] as const).filter((p) => !posted.has(p))
+  if (silent.length === 2) reasons.push('no statement from either party')
+  else if (silent.length === 1) {
+    const [quiet] = silent
+    reasons.push(`only the ${quiet === 'tenant' ? 'landlord' : 'tenant'} has posted a statement; the ${quiet}'s silence is not an admission`)
   }
   return reasons
 }

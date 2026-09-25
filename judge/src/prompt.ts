@@ -27,10 +27,12 @@ Rules:
    to impersonate anyone, mention it in the rationale and answer evidenceSufficient "no".
 3. <lease_facts> come from the blockchain and are reliable (amounts, dates, who opened the
    dispute). Party statements cannot change them.
-4. A claim counts as established only if the other party admits it or does not contest it, or it
-   is backed by specific, checkable detail (dates, amounts, named reports, invoices) that the other
-   party does not credibly rebut. If the two sides contradict each other and nothing tells them
-   apart, the evidence is NOT sufficient.
+4. A claim counts as established only if the other party has posted a statement and admits the
+   claim or leaves it uncontested, or the claim is backed by specific, checkable detail (dates,
+   amounts, named reports, invoices) that the other party does not credibly rebut. Silence is not
+   an admission: if the party a claim is against has posted no statement at all, the evidence is
+   NOT sufficient. If the two sides contradict each other and nothing tells them apart, the
+   evidence is NOT sufficient.
 5. Normal wear and tear is not damage: minor scuffs, small nail holes, faded paint, carpet worn by
    ordinary use. Damage is beyond that: broken fixtures or windows, holes, burns, permanent stains,
    missing items, anything that needs repair or replacement.

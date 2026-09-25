@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { abstainReasons, abstainWithoutModel, confidenceBasis, decide, overallConfidence } from '../src/decide.ts'
+import { SYSTEM_PROMPT } from '../src/prompt.ts'
+import { mockAnswers } from '../src/providers/mock.ts'
+import { screenReasons } from '../src/screen.ts'
+import type { DisputeInput, Party } from '../src/types.ts'
 import { answers, fixture } from './helpers.ts'
 
 const judge = { provider: 'mock', model: 'test' }
@@ -78,5 +82,52 @@ describe('abstain logic', () => {
     expect(d.ruling.answers).toBeNull()
     expect(d.ruling.tenantBps).toBeNull()
     expect(d.rulingHash).toMatch(/^0x[0-9a-f]{64}$/)
+  })
+})
+
+describe('one-sided evidence: silence is not an admission', () => {
+  /** damage-admitted with only the given party's statements. */
+  function onlyFrom(party: Party, statement: string): DisputeInput {
+    const base = fixture('damage-admitted')
+    const e = base.evidence.find((x) => x.party === party)!
+    return { ...base, evidence: [{ ...e, id: 'E1', statement }] }
+  }
+  const landlordOnly = onlyFrom('landlord', 'The tenant destroyed the flat and left without notice.')
+  const glmJudge = { provider: 'glm', model: 'glm-5.3' }
+
+  it('the prompt no longer counts an uncontested claim as established when the other side posted nothing', () => {
+    expect(SYSTEM_PROMPT).not.toMatch(/admits it or does not contest it/)
+    expect(SYSTEM_PROMPT).toMatch(/Silence is not\s+an admission: if the party a claim is against has posted no statement at all, the evidence is\s+NOT sufficient/)
+  })
+
+  it('a confident "yes, the whole deposit" on a landlord-only case abstains in code (whatever the model answered)', () => {
+    const sure = answers({
+      damageBeyondNormalWear: { answer: 'yes', confidence: 0.9 },
+      rentClaimValid: { answer: 'yes', confidence: 0.9 },
+      evidenceSufficient: { answer: 'yes', confidence: 0.85 },
+      severity: 5,
+    })
+    const d = decide(landlordOnly, sure, glmJudge, 0.7)
+    expect(d.ruling.decision).toBe('abstain')
+    expect(d.ruling.tenantBps).toBeNull()
+    expect(d.ruling.abstainReasons).toEqual(["only the landlord has posted a statement; the tenant's silence is not an admission"])
+    expect(d.ruling.rubric?.tenantBps).toBe(0) // what a first mover would have got
+  })
+
+  it('the mock gives the same answer as the prompt: evidence insufficient', () => {
+    const a = mockAnswers(landlordOnly)
+    expect(a.evidenceSufficient.answer).toBe('no')
+    expect(a.rationale).toMatch(/silence is not an admission/)
+    expect(decide(landlordOnly, a, { provider: 'mock', model: 'mock-keywords-v1' }, 0.7).ruling.decision).toBe('abstain')
+  })
+
+  it('applies to either side, and never to a case where both have posted', () => {
+    expect(screenReasons(onlyFrom('tenant', 'Please return my deposit.'))).toEqual([
+      "only the tenant has posted a statement; the landlord's silence is not an admission",
+    ])
+    expect(screenReasons({ ...landlordOnly, evidence: [] })).toEqual(['no statement from either party'])
+    for (const name of ['damage-admitted', 'contested', 'no-claims', 'injection']) {
+      expect(screenReasons(fixture(name)).filter((r) => /silence|either party/.test(r)), name).toEqual([])
+    }
   })
 })

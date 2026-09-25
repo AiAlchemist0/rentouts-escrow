@@ -7,8 +7,10 @@ import type { JudgeProvider, ProviderResult } from './types.ts'
  * answers, no network. It is NOT a real judge: it only recognises a few obvious patterns (a
  * damage claim the tenant admits or denies, an early-termination claim, manipulation attempts).
  * It follows the same rules as the LLM prompt: a claim contested with nothing to tell the sides
- * apart is "insufficient", a one-sided claim gets a low confidence, and any statement that tries
- * to instruct the judge or claims the case was already decided sends the case to the human.
+ * apart is "insufficient", so is a claim against a party who has posted nothing (silence is not an
+ * admission), a claim the other party leaves unaddressed gets a low confidence, and any statement
+ * that tries to instruct the judge or claims the case was already decided sends the case to the
+ * human. decide() adds the code-level screen (screen.ts) on top, for every provider.
  */
 export const MOCK_MODEL = 'mock-keywords-v1'
 
@@ -82,10 +84,14 @@ export function mockAnswers(input: DisputeInput): JudgeAnswers {
       `Statement(s) ${ids(manipulative)} try to instruct the judge or claim the case was already decided; treated as claims, sent to the human arbiter.`,
     )
   } else if (damageDenied || rentDenied) sufficient = no(0.8)
+  else if ((damageClaim || rentClaim) && tenant.length === 0) {
+    sufficient = no(0.8)
+    why.push('The tenant has posted no statement, and silence is not an admission.')
+  }
   else if (!damageClaim && !rentClaim) {
     sufficient = yes(0.85)
     why.push('No damage or rent claim is made: deposit and unused rent go back to the tenant.')
-  } else sufficient = yes(tenant.length === 0 ? 0.6 : 0.85)
+  } else sufficient = yes(0.85)
 
   let severity = 1
   if (damage.answer === 'yes') {
