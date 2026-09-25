@@ -5,16 +5,16 @@ Short architecture decision records (ADRs) for RentOuts Escrow at ETHGlobal Toky
 | # | Decision | Status |
 |---|---|---|
 | [01](#adr-01-one-chain-ethereum-sepolia-for-everything) | One chain: Ethereum Sepolia for everything | accepted (Fri 22:40 JST) |
-| [02](#adr-02-non-custodial-escrow-with-full-prepayment-and-short-periods) | Non-custodial escrow with full prepayment and short periods | accepted, built |
-| [03](#adr-03-one-fixed-arbiter-that-can-only-split) | One fixed arbiter that can only split | accepted, built; the arbiter is now `AIArbiter` ([ADR-11](#adr-11-an-ai-judge-that-only-proposes-a-human-has-the-last-word)) |
+| [02](#adr-02-non-custodial-escrow-with-full-prepayment-and-short-periods) | Non-custodial escrow with full prepayment and short periods | accepted, live |
+| [03](#adr-03-one-fixed-arbiter-that-can-only-split) | One fixed arbiter that can only split | accepted, live; the arbiter is the `AIArbiter` contract ([ADR-11](#adr-11-an-ai-judge-that-only-proposes-a-human-has-the-last-word)) |
 | [04](#adr-04-circles-test-usdc-as-the-escrow-token) | Circle's test USDC as the escrow token | accepted (Fri 22:40 JST) |
-| [05](#adr-05-credentials-derived-on-chain-by-a-permissionless-credentialsync) | Credentials derived on-chain by a permissionless `CredentialSync` | accepted, built, not yet deployed |
+| [05](#adr-05-credentials-derived-on-chain-by-a-permissionless-credentialsync) | Credentials derived on-chain by a permissionless `CredentialSync` | accepted, live (Sat 03:08 JST) |
 | [06](#adr-06-soulbound-through-ens-roles-not-a-custom-nft) | Soulbound through ENS roles, not a custom NFT | accepted, live |
 | [07](#adr-07-names-never-expire-revocation-is-the-only-end-labels-are-single-use) | Names never expire; revocation is the only end; labels are single-use | accepted, live |
-| [08](#adr-08-a-separate-issuer-eoa-with-key-scoped-ens-roles) | A separate issuer EOA with key-scoped ENS roles | accepted, live (role cleanup pending) |
-| [09](#adr-09-lease-shares-minted-to-an-allowlisted-landlord-at-createlease) | Lease shares minted to an allowlisted landlord at `createLease` | accepted, built |
-| [10](#adr-10-world-id-behind-a-human-gate-seam-that-only-gates-new-funding) | World ID behind a human-gate seam that only gates new funding | accepted, built; World verifier on Saturday |
-| [11](#adr-11-an-ai-judge-that-only-proposes-a-human-has-the-last-word) | An AI judge that only proposes; a human has the last word | accepted, built, not yet deployed |
+| [08](#adr-08-a-separate-issuer-eoa-with-key-scoped-ens-roles) | A separate issuer EOA with key-scoped ENS roles | accepted, live (role cleanup done Sat 03:09 JST) |
+| [09](#adr-09-lease-shares-minted-to-an-allowlisted-landlord-at-createlease) | Lease shares minted to an allowlisted landlord at `createLease` | accepted, live |
+| [10](#adr-10-world-id-behind-a-human-gate-seam-that-only-gates-new-funding) | World ID behind a human-gate seam that only gates new funding | accepted, live (gate open); World verifier next |
+| [11](#adr-11-an-ai-judge-that-only-proposes-a-human-has-the-last-word) | An AI judge that only proposes; a human has the last word | accepted, live (`AIArbiter`, Sat 03:05 JST) |
 
 ---
 
@@ -130,7 +130,7 @@ Short architecture decision records (ADRs) for RentOuts Escrow at ETHGlobal Toky
 **Consequences.**
 - ENS's access control enforces "the issuer can write `rentouts.rating` but not `avatar`", and one `cast call` shows it (see [DEMO.md](./DEMO.md#optional-cli-proofs)).
 - A key-scoped role applies to every name under the resolver. That's acceptable because the issuer is RentOuts.
-- The first live deploy also granted the issuer three escrow-derived keys (`leasesCompleted`, `disputes`, `escrow`). Re-running the `subnames` phase revokes them. As of a live `roles()` read at Sat 01:20 JST that cleanup has not been broadcast yet.
+- The first live deploy also granted the issuer three escrow-derived keys (`leasesCompleted`, `disputes`, `escrow`). Re-running the `subnames` phase revoked them on Sat 03:09 JST (three `revokeRoles` transactions, [ARCHITECTURE §3](../ARCHITECTURE.md#3-roles-and-trust-model)). A direct write by the issuer now reverts on all five escrow-derived keys.
 
 ## ADR-09: Lease shares minted to an allowlisted landlord at createLease
 
@@ -171,10 +171,10 @@ Short architecture decision records (ADRs) for RentOuts Escrow at ETHGlobal Toky
 - Parties post short statements on-chain (`submitEvidence`: 1–1000 bytes, at most 5 per party, stored as events).
 - The judge service (`judge/`, z.ai GLM 5.3) asks the model a fixed set of typed questions: damage beyond normal wear, whether the landlord's claim to the unearned rent is valid, whether the evidence is sufficient (each yes/no with a probability), a severity from 1 to 5, and a short rationale.
 - **Code, not the model, computes `tenantBps`** from those answers with a fixed rubric, rounded to 25 % steps.
-- The judge **abstains** (no proposal; the human decides) when the evidence is insufficient, any probability is below 0.7, or there are no statements.
+- The judge **abstains** (no proposal; the human decides) when the evidence is insufficient, when an answer the payout rests on has a probability below 0.7, when only one party has posted, or when a statement is flagged by the injection screen in code. With no statements at all it does not call the model.
 - A proposal carries `rulingHash`, the keccak256 of the canonical JSON ruling, so anyone can check what was decided and from which inputs.
 - A proposal only executes after a **challenge window** (120 s in the demo, 60 s to 30 days allowed) in which either party can appeal. After an appeal, only the human can rule.
-- The **human arbiter** (`0x798b…e486`) can rule directly or override an unexecuted proposal at any time.
+- The **human arbiter** (`0x798b…e486`) can rule directly or override an unexecuted proposal at any time. It hands its role over in two steps (`setHuman`, then `acceptHuman` from the new address), so a typo can't strand appealed leases.
 
 **Consequences.**
 - A bad AI answer, a manipulated one, or even a stolen AI or human key can at worst split one disputed lease's own escrow wrongly between its tenant and landlord. It can never pay anyone else (INV-1, INV-4, AI-1..AI-3, all tested).

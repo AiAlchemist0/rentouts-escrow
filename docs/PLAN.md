@@ -47,7 +47,8 @@ gantt
     ENS gate passed, alice.rentouts.eth resolves  :milestone, done, gate, 2026-09-25 22:24, 0m
     CredentialSync and fork tests                 :done, ens3, 2026-09-25 22:42, 25m
     Rebase on main, sync IRentEscrow              :done, ens4, 2026-09-26 00:40, 10m
-    Deploy CredentialSync, issuer role cleanup    :ens5, 2026-09-26 10:00, 1h
+    ens/ review, deploy-script fixes, 42 tests    :done, ens5, 2026-09-26 01:05, 60m
+    Deploy CredentialSync, issuer role cleanup    :done, ens6, 2026-09-26 03:08, 2m
 
     section Escrow, gate and RWA
     LeaseShare1155 and tests                      :done, rwa1, 2026-09-25 21:31, 40m
@@ -55,18 +56,23 @@ gantt
     RentEscrow, invariants, DeployEscrow          :done, esc1, 2026-09-25 22:45, 20m
     Review fixes on the escrow                    :done, esc2, 2026-09-25 23:05, 15m
     HumanGate seam and deploy wiring              :done, gate1, 2026-09-26 00:15, 30m
-    Deploy AIArbiter, then the escrow stack       :esc3, 2026-09-26 09:00, 1h
+    Escrow review fixes, invariant depth 256      :done, esc3, 2026-09-26 02:03, 6m
+    Deploy AIArbiter, then the escrow stack       :done, esc4, 2026-09-26 03:05, 3m
+    Live on Ethereum Sepolia, 11 txs              :milestone, done, live, 2026-09-26 03:09, 0m
+    Source verified, Sourcify and Blockscout      :milestone, done, src, 2026-09-26 03:15, 0m
     World verifier behind HumanGate               :world, 2026-09-26 12:00, 5h
 
     section AI dispute judge
     AIArbiter, invariants, deploy script          :done, ai1, 2026-09-26 00:45, 15m
     Judge service, GLM 5.3, rubric, tests         :done, ai2, 2026-09-26 01:00, 15m
-    AI judge live on Sepolia, rehearsal           :ai3, 2026-09-26 11:00, 2h
+    Judge and arbiter review fixes                :done, ai3, 2026-09-26 01:53, 50m
+    AI judge live on Sepolia, rehearsal           :ai4, 2026-09-26 11:00, 2h
 
     section App, review, docs
     App wizard and human-gate notice              :done, app1, 2026-09-25 22:40, 130m
     Architecture docs                             :done, doc1, 2026-09-25 23:05, 25m
-    System architecture docs update               :active, doc2, 2026-09-26 01:00, 1h
+    System architecture docs update               :done, doc2, 2026-09-26 01:00, 32m
+    Docs with live addresses, test counts         :done, doc3, 2026-09-26 03:15, 20m
     Draft PRs, external reviews, merge            :rev, 2026-09-26 02:00, 7h
     End-to-end run on Sepolia                     :e2e, 2026-09-26 10:00, 2h
 
@@ -97,25 +103,28 @@ Done bars come from commit times and [`docs/ens/LOG.md`](./ens/LOG.md). The othe
 | Sat 00:15–00:44 | Human-gate seam: immutable `RentEscrow.humanGate`, a `HumanGate` with a swappable verifier, `DeployEscrow` deploys it open, 16 tests | `feat/core-escrow` |
 | Sat 00:40–00:49 | `ens-integration` rebased on `main`, its `IRentEscrow` copy synced (30/30 fork tests). App review fixes and the human-gate notice on the fund step. | `ens-integration`, `feat/app` |
 | Sat 00:45–01:14 | `AIArbiter` (31 tests, invariants AI-1..AI-3), `DeployAIArbiter`, and the judge service (GLM 5.3 and mock providers, rubric, abstain rules, `rulingHash`, 55 tests) | `feat/ai-judge` |
-| Sat 01:00–01:45 | This documentation: one architecture doc for the whole system, merged with Dean's `LeaseShare1155` doc | `docs/system-architecture` |
+| Sat 01:00–01:32 | This documentation: one architecture doc for the whole system, merged with Dean's `LeaseShare1155` doc | `docs/system-architecture` |
+| Sat 01:53–02:43 | Review fixes, judge: confidence counts only the answers the payout rests on; `--verify` also checks `inputHash`, and `--onchain` compares with the chain; hash-named ruling files that never overwrite an on-chain preimage; an injection screen in code; silence is not an admission; a mock proposal says so on-chain. `AIArbiter`: a two-step human handover (`setHuman`, then `acceptHuman`). Escrow: a dispute ruling counts earned rent as rent paid; the USDC-blacklist exit is tested; invariant depth is 256. Root 137 tests, judge 92. | `feat/ai-judge`, `feat/core-escrow` |
+| Sat 01:05–02:05 | `ens/` review (no critical or high findings, no redeploy), then deploy-script fixes: `credentialSync` reconcile, sticky `removeIssuer`, parent checks. 42/42 fork tests. | `ens-integration`, [LOG](./ens/LOG.md) |
+| Sat 03:05–03:09 | **Deployed on Ethereum Sepolia:** `AIArbiter`, then `LeaseShare1155`, `HumanGate` and `RentEscrow` (plus `setMinter`), then `bindEscrow`, then `CredentialSync` (plus `setIssuer`), then the issuer role cleanup (3 `revokeRoles`). 11 transactions, all status 1, about 0.0062 ETH. The wiring was read back on-chain (27/27 checks), and the 42 ENS fork tests passed against live Sepolia. | [ARCHITECTURE §10](../ARCHITECTURE.md#10-deployments) |
+| Sat 03:15 | All five contracts source verified: Sourcify `exact_match` (creation and runtime code) and Blockscout. Each creation bytecode was rebuilt and matched byte for byte against its deploy transaction. Etherscan still needs an API key. | [ARCHITECTURE §10](../ARCHITECTURE.md#10-deployments) |
+| Sat 03:25 | These docs updated with the live addresses and current test counts | `docs/system-architecture` |
 
 ### Next
 
 | Target | What | Owner |
 |---|---|---|
-| Sat early | Draft PRs, external reviews, fixes, merges (see §6) | team |
-| Sat morning | Deploy on Sepolia in order (§4): `AIArbiter` → `DeployEscrow` (`LeaseShare1155`, `HumanGate`, `RentEscrow`) → `bindEscrow` → `CredentialSync`. Record the addresses. | team |
-| Sat morning | Broadcast the issuer role cleanup (`./scripts/ens.sh subnames`) | Bektur |
-| Sat morning | Point the app at the deployed addresses and run the whole demo once on Sepolia | team |
-| Sat | **AI judge live demo:** dispute → evidence → `./run.sh --lease <id> --propose` (GLM 5.3) → challenge window → `execute`. Rehearse an appeal and a `resolveByHuman` override. | team |
-| Sat | **World integration:** a World ID verifier contract that implements `isVerified(address)`, then `HumanGate.setVerifier(worldVerifier)` from the gate owner. No escrow redeploy. | team |
+| Sat morning | **World integration:** a World ID verifier contract that implements `isVerified(address)`, then `HumanGate.setVerifier(worldVerifier)` on the live gate `0xFF68…3abd`, from the gate owner (the deployer). No escrow redeploy. | team |
+| Sat morning | **Live demo on Sepolia:** point the app at the live addresses ([DEMO pre-flight](./DEMO.md#pre-flight-t-30-min)) and run the whole demo once. It covers lease → fund → claim → close → sync, then dispute → evidence → `./run.sh --lease <id> --propose` (GLM 5.3) → challenge window → `execute`. Rehearse an appeal and a `resolveByHuman` override. | team |
+| Sat | Draft PRs, external reviews, fixes, merges (see §6) | team |
+| Sat | Optional: Etherscan verification (needs an `ETHERSCAN_API_KEY`); Sourcify and Blockscout are done | team |
 | Sat evening | ENS, Curvegrid and World writeups, ENS feedback file, optional MultiBaas | Bektur / Dean |
 | Sat night | Demo rehearsal and video | team |
 | Sun ≤ 08:00 | Submit | team |
 
 ## 4. Deploy order
 
-Every link between the contracts is immutable except `HumanGate.verifier` and the `AIArbiter` settings, so the order is fixed. Commands are in [ARCHITECTURE §10](../ARCHITECTURE.md#10-deployments).
+Every link between the contracts is immutable except `HumanGate.verifier` and the `AIArbiter` settings, so the order is fixed. Steps 1 to 4 were broadcast on Sat 03:05–03:09 JST. The addresses, transactions and commands are in [ARCHITECTURE §10](../ARCHITECTURE.md#10-deployments). Step 5 is next.
 
 ```mermaid
 flowchart LR
@@ -137,9 +146,9 @@ Every script dry-runs first. The root scripts record addresses only in a real `-
 
 | Track | What we built for it | Where | Status |
 |---|---|---|---|
-| **ENS** | ENSv2 subnames in our own `UserRegistry`. Soulbound through ENS roles, revocable with a record wipe, never expiring. A shared `PermissionedResolver` with **key-scoped** issuer roles (Enhanced Access Control). Reads only through the Universal Resolver. An ENSIP-19 default address record. A credential derived on-chain from the escrow. | [`ens/`](../ens/), the app's identity step | 🟢 live on Sepolia (`CredentialSync` pending) |
-| **Curvegrid: Best RWA Tokenization Project** | `LeaseShare1155`: ERC-1155 lease shares with compliance-aware transfer logic in `_update` (mint, single and batch). Minted to the allowlisted landlord at `createLease`, so listing is compliance-gated. | [`src/LeaseShare1155.sol`](../src/LeaseShare1155.sol) | 🟢 standalone on Base Sepolia; 🟡 integrated deploy on Sepolia pending |
-| **World** | `HumanGate` in `fundLease`: a verified-human check on who may fund a new lease, with a verifier that can be set or swapped without redeploying the escrow. The World ID verifier plugs in behind it. | [`src/HumanGate.sol`](../src/HumanGate.sol), `RentEscrow.fundLease`, the app's fund step | 🟡 seam built and tested; World verifier on Saturday |
+| **ENS** | ENSv2 subnames in our own `UserRegistry`. Soulbound through ENS roles, revocable with a record wipe, never expiring. A shared `PermissionedResolver` with **key-scoped** issuer roles (Enhanced Access Control). Reads only through the Universal Resolver. An ENSIP-19 default address record. A credential derived on-chain from the escrow. | [`ens/`](../ens/), the app's identity step | 🟢 live on Sepolia, including `CredentialSync` and the issuer role cleanup |
+| **Curvegrid: Best RWA Tokenization Project** | `LeaseShare1155`: ERC-1155 lease shares with compliance-aware transfer logic in `_update` (mint, single and batch). Minted to the allowlisted landlord at `createLease`, so listing is compliance-gated. | [`src/LeaseShare1155.sol`](../src/LeaseShare1155.sol) | 🟢 standalone on Base Sepolia; 🟢 integrated on Ethereum Sepolia (`0x9A9F…1E09`, minter = `RentEscrow`) |
+| **World** | `HumanGate` in `fundLease`: a verified-human check on who may fund a new lease, with a verifier that can be set or swapped without redeploying the escrow. The World ID verifier plugs in behind it. | [`src/HumanGate.sol`](../src/HumanGate.sol), `RentEscrow.fundLease`, the app's fund step | 🟢 `HumanGate` live on Sepolia (open); 🟡 World verifier next |
 | **Continuity** | RentOuts is a live product; everything in this repo was written during the event | [rentouts.co](https://rentouts.co) | n/a |
 
 ## 6. Review and merge process
