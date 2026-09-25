@@ -109,7 +109,13 @@ npm test               # vitest: label validation, address input, USDC formattin
 npm run typecheck      # tsc --noEmit
 npm run build          # typecheck + vite build
 npm run ens:smoke      # live ENSv2 read on Sepolia, no wallet
+npm run live:smoke     # live read of the configured contracts on Sepolia: checks they point at each other
 ```
+
+`live:smoke` resolves addresses the way the app does (`VITE_*`, then `deployments.json`, then the escrow's
+getters) and checks `RentEscrow.arbiter()` = the AIArbiter, `AIArbiter.escrow()`, `RentEscrow.leaseShare()`,
+`LeaseShare1155.minter()`, `RentEscrow.humanGate()`, `CredentialSync.escrow()` / `.subnames()` and the
+issuer role on `RentoutsSubnames`. It exits 1 on any mismatch.
 
 `ens:smoke` output (Fri 2026-09-25):
 

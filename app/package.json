@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "ens:smoke": "node scripts/ens-smoke.mjs"
+    "ens:smoke": "node scripts/ens-smoke.mjs",
+    "live:smoke": "node scripts/live-smoke.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.103.2",

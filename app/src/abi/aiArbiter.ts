@@ -13,6 +13,7 @@ export const aiArbiterAbi = parseAbi([
   'struct Ruling { uint8 status; uint16 tenantBps; uint16 confidenceBps; uint64 proposedAt; uint64 deadline; bytes32 rulingHash; }',
 
   'event EscrowBound(address indexed escrow)',
+  'event HumanTransferStarted(address indexed currentHuman, address indexed pendingHuman)',
   'event HumanUpdated(address indexed previousHuman, address indexed newHuman)',
   'event AgentUpdated(address indexed previousAgent, address indexed newAgent)',
   'event ChallengeWindowUpdated(uint32 previousWindow, uint32 newWindow)',
@@ -25,6 +26,7 @@ export const aiArbiterAbi = parseAbi([
 
   'error ZeroAddress()',
   'error NotHuman()',
+  'error NotPendingHuman()',
   'error NotAgent()',
   'error NotParty(uint256 leaseId)',
   'error PartyCannotArbitrate(uint256 leaseId, address account)',
@@ -51,6 +53,7 @@ export const aiArbiterAbi = parseAbi([
 
   'function escrow() view returns (address)',
   'function human() view returns (address)',
+  'function pendingHuman() view returns (address)',
   'function agent() view returns (address)',
   'function challengeWindow() view returns (uint32)',
   'function evidenceCount(uint256 leaseId, address party) view returns (uint256 count)',
@@ -58,6 +61,7 @@ export const aiArbiterAbi = parseAbi([
 
   'function bindEscrow(address escrow_)',
   'function setHuman(address newHuman)',
+  'function acceptHuman()',
   'function setAgent(address newAgent)',
   'function setChallengeWindow(uint32 newWindow)',
   'function submitEvidence(uint256 leaseId, string statement)',
