@@ -145,7 +145,7 @@ What the contracts guarantee whatever the model says: AIArbiter's only state-cha
 
 ```bash
 npx tsc --noEmit
-npx vitest run      # 65 tests; the cast keystore cross-check runs when `cast` is on PATH
+npx vitest run      # 92 tests; the cast keystore cross-check runs when `cast` is on PATH
 ```
 
 The tests cover:
@@ -155,7 +155,9 @@ The tests cover:
 - a replay of the answers a real GLM 5.3 run gave on the three demo fixtures (`test/recorded/glm-5.3.json`, copied from the gitignored `out/`);
 - zod validation, the single retry, the empty-reply budget bump, and the JSON-mode fallback through the real OpenAI SDK against a mocked HTTP endpoint;
 - canonical JSON and `rulingHash` stability (including a pinned hash for the demo fixture);
-- prompt construction and the injection fixtures;
+- prompt construction, the injection fixtures, and the code-level screen (injection and one-sided evidence) on the GLM path;
+- saved rulings: hash-named records, `--verify` catching edited input, and `--onchain` against a stubbed client;
+- what `--propose` does over an open proposal (including the exit code 3 warning when the judge abstains), and the mock label on-chain;
 - keystore decryption (including a keystore written by `cast wallet new`);
 - lease-fact arithmetic;
 - the CLI end to end on the fixtures.
