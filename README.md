@@ -60,6 +60,8 @@ The escrow has no owner and cannot change, yet World ID has to be added later. T
 
 The gate owner can only decide **who may fund a new lease**. It holds no tokens and cannot move, freeze or redirect funds. `claimRent`, `closeLease`, `openDispute` and `resolveDispute` never consult it, so a funded lease runs to the end whatever the gate says (tested). If the verifier reverts, funding fails closed until the owner fixes or clears it.
 
+**Live:** the Sepolia escrow's gate is `HumanGate` [`0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd`](https://eth-sepolia.blockscout.com/address/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) (owner: the deployer; verifier `0`, so open). Its deploy tx and verification status are in the Live on Ethereum Sepolia table below.
+
 ### Invariants (`test/RentEscrow.invariant.t.sol`)
 
 A handler runs random create / fund / warp / claim / close / dispute / resolve / cancel sequences across four actors (funding through a `HumanGate` with a verifier that approves them), a keeper and the arbiter, and books every token transfer out of the escrow from the token's own `Transfer` logs:
@@ -112,7 +114,24 @@ Plugging World ID in later is one call from the gate owner, with no escrow redep
 
 **Demo amounts:** the ETHGlobal faucet hands out 1 USDC on Sepolia per claim, so keep demo leases small. For example, `createLease(tenant, 300000, 100000, 60, 3)` escrows a 0.30 USDC deposit + 3 × 0.10 USDC rent at 60-second periods (0.60 USDC total).
 
-- **Deployed addresses (Ethereum Sepolia):** _TBD — written to the `"sepolia"` entry of `deployments.json` by the deploy script_
+### 🟢 Live on Ethereum Sepolia
+
+Chain id 11155111. Deployed on 2026-09-25 (18:05–18:07 UTC) by `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE`: first `DeployAIArbiter`, then `DeployEscrow` with `ESCROW_ARBITER` set to the AIArbiter (its own table is in the AI dispute judge section below). The addresses are also in the `"sepolia"` entry of [`deployments.json`](./deployments.json).
+
+| Contract | Address | Explorers | Deploy tx | Source verified |
+| --- | --- | --- | --- | --- |
+| `RentEscrow` | `0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18` | [Etherscan](https://sepolia.etherscan.io/address/0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18) · [Blockscout](https://eth-sepolia.blockscout.com/address/0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18) | [`0xf8b1d3c0…5c8f00`](https://sepolia.etherscan.io/tx/0xf8b1d3c05a146a85205a215e96e3c3c1eb20015db12323cdc7013eae795c8f00) | [Sourcify](https://repo.sourcify.dev/11155111/0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18) exact match · Blockscout verified · Etherscan not yet |
+| `LeaseShare1155` | `0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09` | [Etherscan](https://sepolia.etherscan.io/address/0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09) · [Blockscout](https://eth-sepolia.blockscout.com/address/0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09) | [`0x05ce482f…24f64b`](https://sepolia.etherscan.io/tx/0x05ce482f57de77b09f73efed346c889b0f6012c3a0b426f8bc76abf7e124f64b) | [Sourcify](https://repo.sourcify.dev/11155111/0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09) exact match · Blockscout verified · Etherscan not yet |
+| `HumanGate` | `0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd` | [Etherscan](https://sepolia.etherscan.io/address/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) · [Blockscout](https://eth-sepolia.blockscout.com/address/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) | [`0x2351a01f…89c232`](https://sepolia.etherscan.io/tx/0x2351a01fdc504feeb7bd8026029c287765e16568aa8370431a498e089e89c232) | [Sourcify](https://repo.sourcify.dev/11155111/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) exact match · Blockscout verified · Etherscan not yet |
+
+Wiring, as read back on-chain:
+
+- `RentEscrow`: `token` = Circle test USDC [`0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`](https://sepolia.etherscan.io/address/0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238), `arbiter` = `AIArbiter` `0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5`, `leaseShare` and `humanGate` = the two contracts above. All four are immutable.
+- `LeaseShare1155`: owner = the deployer, `minter` = `RentEscrow` ([`setMinter` tx `0xc0d8b854…149f84`](https://sepolia.etherscan.io/tx/0xc0d8b854aad94e8fd1cab7488c2e3f29390aa5af2d5127dd2236298534149f84)), and the deployer is allowlisted as the demo landlord. It is a new share contract for this escrow, separate from the standalone `LeaseShare1155` on Base Sepolia (Curvegrid section below).
+- `HumanGate`: owner = the deployer, `verifier` = `0`, so the gate is open until World ID is plugged in.
+- `CredentialSync` [`0xd0783EC7B0668652718f3977Ca92235fe6bF9c56`](https://eth-sepolia.blockscout.com/address/0xd0783EC7B0668652718f3977Ca92235fe6bF9c56) (on the `ens-integration` branch) reads this escrow's `tenantStats` into the tenant's `rentouts.*` ENS records. It is verified the same way (Sourcify exact match, Blockscout verified, not yet on Etherscan).
+
+"Exact match" means Sourcify reproduced both the creation and the runtime bytecode from the source, metadata hash included (solc 0.8.24, or 0.8.28 for `CredentialSync`; `cancun`, optimizer 200 runs, no via-IR). Blockscout imported the source from Sourcify. Etherscan only takes submissions with an API key, so it has none yet. To add it: `forge verify-contract <address> <Contract> --chain sepolia --verifier etherscan --guess-constructor-args --rpc-url sepolia --watch` with `ETHERSCAN_API_KEY` set.
 
 ### Honest limits
 
@@ -159,6 +178,22 @@ cast send <aiArbiter> "bindEscrow(address)" <rentEscrow> --account <human keysto
 ```
 
 `DeployAIArbiter` records `chainId`, `deployer`, `human`, `agent`, `challengeWindow`, `fromBlock` and `aiArbiter` under a top-level `"sepoliaAIArbiter"` key of `deployments.json`, and only in a real broadcast. The key is separate because `DeployEscrow` runs afterwards and rewrites the whole `"sepolia"` entry.
+
+### 🟢 Live on Ethereum Sepolia
+
+| | |
+| --- | --- |
+| `AIArbiter` | `0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5`: [Etherscan](https://sepolia.etherscan.io/address/0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5) · [Blockscout](https://eth-sepolia.blockscout.com/address/0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5) |
+| Network | Ethereum Sepolia (chainId 11155111) |
+| Deploy tx | [`0xc82a9176…b47977a`](https://sepolia.etherscan.io/tx/0xc82a9176171588129ef6244ab9f655b39319a661456d0daedbf7d7673b47977a) (block 11780903, deployer `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE`) |
+| `bindEscrow` tx | [`0xe4771261…5088b875`](https://sepolia.etherscan.io/tx/0xe47712614a63eec77c960c9f27cd31ed34de7d2e7bc3a4b0098172195088b875), sent by the human: bound to `RentEscrow` `0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18`, whose immutable arbiter is this contract |
+| agent | `0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA` (the judge service key) |
+| human | `0x798b01Cef62b889943Ce1D3C5011a755B297e486` (demo human arbiter EOA) |
+| Challenge window | 120 s (live-demo setting) |
+| `fromBlock` | 11780900 (where `judge/` starts scanning for `Evidence` / `DisputeOpened`) |
+| Source verified | [Sourcify](https://repo.sourcify.dev/11155111/0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5) exact match (creation + runtime, solc 0.8.24) · Blockscout verified · Etherscan not yet (needs an API key) |
+
+The same values are in the `"sepoliaAIArbiter"` entry of [`deployments.json`](./deployments.json). The escrow, share and gate addresses are in the RentEscrow section's Live on Ethereum Sepolia table.
 
 **The judge** ([`judge/README.md`](./judge/README.md)): `npm run judge -- --lease <id> [--provider glm|mock] [--propose]`. The model (z.ai GLM 5.3; a deterministic mock without a key) answers three narrow yes/no questions, each with a probability: damage beyond normal wear, whether the landlord's claim to the remaining rent is valid, and whether the evidence is sufficient. It also gives a severity from 1 to 5 and a short rationale. **Code** turns the answers into `tenantBps` with a documented rubric, rounded to 0 / 25 / 50 / 75 / 100 %. The judge abstains, escalating to the human, when the evidence is insufficient, when an answer the payout rests on has a confidence below 0.7, when only one party has posted, or when a statement tries to steer the judge (a code-level screen that runs whatever the model answered). `rulingHash` is the keccak256 of the canonical JSON ruling; anyone can recompute it from the saved file and check it against the chain (`--verify <file> --onchain`). Statements reach the model as quoted, source-labelled data, and the system prompt treats them as possibly false or manipulative. Limits are in the judge README: an uncalibrated model, text-only evidence, coarse splits, and a human route with no deadline.
 
@@ -227,15 +262,21 @@ flowchart TB
 Requires [Foundry](https://getfoundry.sh).
 
 ```bash
-# 1. Install dependencies (OpenZeppelin v5)
-forge install OpenZeppelin/openzeppelin-contracts@v5.1.0 --no-commit
+# 1. Install dependencies (OpenZeppelin v5.1, which brings forge-std along; see remappings.txt).
+#    --no-git: a plain copy under the gitignored lib/, not a git submodule
+forge install OpenZeppelin/openzeppelin-contracts@v5.1.0 --no-git
 
-# 2. Build + test
+# 2. Build + test the contracts
 forge build
 forge test -vv
+
+# 3. Test the AI judge service (Node >= 24)
+cd judge && npm ci && npx vitest run
 ```
 
-Expected: **12 passing** `LeaseShare1155` tests — mint/transfer/batch allowlist gating, revoke-mid-life, access control, and `testFuzz_TransferToRandom_RejectedUnlessAllowlisted` (256 runs) proving the compliance gate.
+Expected: **137 passing** Foundry tests in 9 suites: 12 `LeaseShare1155`, 53 `RentEscrow` unit/fuzz (4 of them with a blacklisting token), 16 `HumanGate`, 15 `DeployEscrow`, 34 `AIArbiter` and 5 `DeployAIArbiter` tests, plus the `RentEscrow` and `AIArbiter` invariant suites, which forge counts as one test each. The `LeaseShare1155` tests cover mint/transfer/batch allowlist gating, revoke-mid-life, access control, and `testFuzz_TransferToRandom_RejectedUnlessAllowlisted` (256 runs) proving the compliance gate.
+
+The judge: **92 passing** vitest tests in 12 files. One of them reads a throwaway keystore made by `cast wallet new`, so it is skipped when `cast` is not on PATH (91 passed, 1 skipped).
 
 ### Deploy to Base Sepolia
 
