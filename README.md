@@ -154,6 +154,23 @@ Resulting balances: issuer 600, allowlisted recipient 400, totalSupply 1000.
 
 ---
 
+## ENS identity (ENSv2, Ethereum Sepolia)
+
+Tenants get a soulbound `<name>.rentouts.eth` subname on the ENSv2 beta. Its `rentouts.*` text records carry the rental credential: only RentOuts issuers can write them, and any ENSv2-aware app can read them through the Universal Resolver. `CredentialSync.sync(tenant)` is permissionless and derives the track-record keys on-chain from `RentEscrow.tenantStats`. It is a separate Foundry project in [`ens/`](./ens). Design, records, trust model and run steps: **[ens/README.md](./ens/README.md)**.
+
+| Ethereum Sepolia (11155111), testnet only | |
+| --- | --- |
+| `rentouts.eth` resolver (`PermissionedResolver`) | [`0xBB8A105f48Ac836F549eC0B6A1a45BB7BA0961E5`](https://sepolia.etherscan.io/address/0xBB8A105f48Ac836F549eC0B6A1a45BB7BA0961E5) |
+| Subname registry (`UserRegistry`) | [`0xD2D122000D4725a863376EcAe4220BC20590f382`](https://sepolia.etherscan.io/address/0xD2D122000D4725a863376EcAe4220BC20590f382) |
+| `RentoutsSubnames` | [`0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60`](https://sepolia.etherscan.io/address/0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60) |
+| `CredentialSync` (permissionless `sync(tenant)`) | [`0xd0783EC7B0668652718f3977Ca92235fe6bF9c56`](https://eth-sepolia.blockscout.com/address/0xd0783EC7B0668652718f3977Ca92235fe6bF9c56) |
+| `RentEscrow` it reads from | [`0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18`](https://eth-sepolia.blockscout.com/address/0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18) |
+| Demo credential | `alice.rentouts.eth` |
+
+`RentoutsSubnames` and `CredentialSync` are source verified on Sourcify and Blockscout. Addresses for the app: [`ens/deployments/sepolia.json`](./ens/deployments/sepolia.json).
+
+---
+
 ## Architecture
 
 Full write-up + diagrams: **[ARCHITECTURE.md](./ARCHITECTURE.md)**. `LeaseShare1155` tokenizes a lease/deposit as a permissioned ERC-1155 (`tokenId == leaseId`); every recipient is checked against a compliance allowlist in the OZ v5 `_update` hook, so shares can only move between approved wallets.
