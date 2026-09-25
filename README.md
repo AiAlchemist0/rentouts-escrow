@@ -12,6 +12,7 @@
 | `test/LeaseShare1155.t.sol` | Foundry tests incl. a fuzz proving non-allowlisted recipients are always rejected |
 | `script/DeployLeaseShare.s.sol` | Base Sepolia deploy script |
 | `deployments.json` | Live contract addresses |
+| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Design + diagrams for the deployed contract |
 
 _Coming during the event: `RentEscrow.sol` (USDC escrow + World ID gate) and `RentoutsSubnames` (ENSv2 identity)._
 
@@ -46,6 +47,32 @@ Resulting balances: issuer 600, allowlisted recipient 400, totalSupply 1000.
 ### Team
 - [@AiAlchemist0](https://github.com/AiAlchemist0) (Dean) — contracts / RWA
 - Bektur — ENS identity
+
+---
+
+## Architecture
+
+Full write-up + diagrams: **[ARCHITECTURE.md](./ARCHITECTURE.md)**. `LeaseShare1155` tokenizes a lease/deposit as a permissioned ERC-1155 (`tokenId == leaseId`); every recipient is checked against a compliance allowlist in the OZ v5 `_update` hook, so shares can only move between approved wallets.
+
+```mermaid
+flowchart TB
+  classDef contract fill:#0f2e27,stroke:#1fa882,stroke-width:2px,color:#e8fff7;
+  classDef actor fill:#12233f,stroke:#5b8def,stroke-width:1.5px,color:#e6efff;
+  classDef good fill:#0f2e27,stroke:#1fa882,stroke-width:1.5px,color:#b8ffe9;
+  classDef bad fill:#3a1620,stroke:#e5484d,stroke-width:1.5px,color:#ffd7db;
+
+  Owner["Issuer / Owner (RentOuts)"]:::actor
+  Escrow["RentEscrow (coming - the spine)"]:::actor
+
+  subgraph Chain["Base Sepolia - LeaseShare1155 - Sourcify verified"]
+    LS["LeaseShare1155 (ERC-1155)<br/>tokenId equals leaseId<br/>allowlisted mapping<br/>_update compliance gate<br/>mintShare: minter or owner only"]:::contract
+  end
+
+  Owner -->|"setAllowlist / setMinter"| LS
+  Escrow -->|"mintShare(leaseId, to, amount)"| LS
+  LS -->|"mint and transfer allowed"| Allow["Allowlisted holders<br/>tenant, investor"]:::good
+  LS -.->|"transfer blocked"| Deny["Non-allowlisted wallet<br/>revert NotAllowlisted(to)"]:::bad
+```
 
 ---
 
