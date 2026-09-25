@@ -5,6 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IRentEscrow} from "./interfaces/IRentEscrow.sol";
+import {IHumanGate} from "./interfaces/IHumanGate.sol";
 import {LeaseShare1155} from "./LeaseShare1155.sol";
 
 /// @title RentEscrow
@@ -13,10 +14,14 @@ import {LeaseShare1155} from "./LeaseShare1155.sol";
 ///         tenant when the term ends. Disputes freeze the lease until a fixed arbiter splits the
 ///         remaining escrow between the two parties. See {IRentEscrow} for the lifecycle and the
 ///         invariants (INV-1..INV-4) exercised by test/RentEscrow.invariant.t.sol.
-/// @dev    No owner, no admin, no fees, no upgradeability: token, arbiter and leaseShare are
-///         immutable. The only party-independent role is the arbiter: it can never be a lease's
+/// @dev    No owner, no admin, no fees, no upgradeability: token, arbiter, leaseShare and humanGate
+///         are immutable. The only party-independent role is the arbiter: it can never be a lease's
 ///         landlord or tenant, and it can only split a disputed lease's own escrow between that
 ///         lease's tenant and landlord.
+///         humanGate (optional) is asked once, in fundLease, whether the tenant is a verified human.
+///         The gate's own owner can later point it at a verifier (World ID) without redeploying
+///         this contract, but a gate can only refuse NEW funding: it holds no funds, and no other
+///         function consults it, so funded leases always run to the end.
 ///         The token must be a plain ERC-20 (no fee-on-transfer / rebasing), e.g. Circle USDC.
 ///         Built for ETHGlobal Tokyo 2026 (Ethereum Sepolia).
 contract RentEscrow is IRentEscrow, ReentrancyGuard {
@@ -34,6 +39,8 @@ contract RentEscrow is IRentEscrow, ReentrancyGuard {
     address public immutable arbiter;
     /// @inheritdoc IRentEscrow
     address public immutable leaseShare;
+    /// @inheritdoc IRentEscrow
+    address public immutable humanGate;
 
     /// @inheritdoc IRentEscrow
     uint256 public nextLeaseId = 1;
@@ -49,16 +56,23 @@ contract RentEscrow is IRentEscrow, ReentrancyGuard {
 
     /// @notice Constructor argument was the zero address (token or arbiter).
     error ZeroAddress();
+    /// @notice A non-zero humanGate must be a contract: an EOA would make every fundLease revert.
+    error HumanGateHasNoCode(address humanGate);
 
     /// @param token_      escrow token (Circle USDC on Sepolia: 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238)
-    /// @param arbiter_    dispute arbiter (a single EOA on testnet; a Safe in production)
+    /// @param arbiter_    dispute arbiter: an EOA or a contract (e.g. a Safe multisig); on testnet a
+    ///                    single EOA
     /// @param leaseShare_ LeaseShare1155 this contract mints lease shares on, or address(0) to disable
-    // forge-lint: disable-next-item(missing-zero-check) -- address(0) leaseShare_ means "shares disabled"
-    constructor(IERC20 token_, address arbiter_, address leaseShare_) {
+    /// @param humanGate_  IHumanGate checked in fundLease (normally a HumanGate), or address(0) for no
+    ///                    gating at all
+    // forge-lint: disable-next-item(missing-zero-check) -- address(0) leaseShare_ / humanGate_ mean "disabled"
+    constructor(IERC20 token_, address arbiter_, address leaseShare_, address humanGate_) {
         if (address(token_) == address(0) || arbiter_ == address(0)) revert ZeroAddress();
+        if (humanGate_ != address(0) && humanGate_.code.length == 0) revert HumanGateHasNoCode(humanGate_);
         token = address(token_);
         arbiter = arbiter_;
         leaseShare = leaseShare_;
+        humanGate = humanGate_;
     }
 
     // ------------------------------------------------------------------ views
@@ -147,10 +161,15 @@ contract RentEscrow is IRentEscrow, ReentrancyGuard {
     }
 
     /// @inheritdoc IRentEscrow
+    /// @dev The human-gate check is a view (staticcall) made before any state change; a gate that
+    ///      reverts makes funding revert (fail closed).
     function fundLease(uint256 leaseId) external nonReentrant {
         Lease storage l = _leases[leaseId];
         _requireState(l, leaseId, State.CREATED);
         if (msg.sender != l.tenant) revert NotTenant(leaseId);
+        if (humanGate != address(0) && !IHumanGate(humanGate).isVerified(msg.sender)) {
+            revert NotVerifiedHuman(msg.sender);
+        }
 
         uint256 amount = uint256(l.deposit) + uint256(l.rentPerPeriod) * l.periods;
         // casting to 'uint64' is safe because timestamps fit in 64 bits for ~5e11 years

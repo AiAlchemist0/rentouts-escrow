@@ -100,7 +100,7 @@ contract DeployEscrow is Script {
         shares = existingShares == address(0)
             ? new LeaseShare1155(deployer, SHARE_URI)  // constructor allowlists the owner
             : LeaseShare1155(existingShares);
-        escrow = new RentEscrow(IERC20(token), arbiter, address(shares));
+        escrow = new RentEscrow(IERC20(token), arbiter, address(shares), address(0)); // human gate: next commit
         shares.setMinter(address(escrow));
         if (!shares.allowlisted(deployer)) shares.setAllowlist(deployer, true);
         vm.stopBroadcast();

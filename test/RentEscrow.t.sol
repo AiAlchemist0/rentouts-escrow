@@ -51,7 +51,7 @@ contract RentEscrowTest is Test {
         vm.warp(1_700_000_000);
         usdc = new MockUSDC();
         shares = new LeaseShare1155(issuer, "https://rentouts.co/api/lease-share/{id}.json");
-        escrow = new RentEscrow(IERC20(address(usdc)), arbiter, address(shares));
+        escrow = new RentEscrow(IERC20(address(usdc)), arbiter, address(shares), address(0));
 
         vm.startPrank(issuer);
         shares.setMinter(address(escrow));
@@ -94,6 +94,7 @@ contract RentEscrowTest is Test {
         assertEq(escrow.token(), address(usdc));
         assertEq(escrow.arbiter(), arbiter);
         assertEq(escrow.leaseShare(), address(shares));
+        assertEq(escrow.humanGate(), address(0)); // gating: test/HumanGate.t.sol
         assertEq(escrow.SHARES_PER_LEASE(), 100);
         assertEq(escrow.MIN_PERIOD(), 60);
         assertEq(escrow.nextLeaseId(), 1);
@@ -102,9 +103,9 @@ contract RentEscrowTest is Test {
 
     function test_Constructor_RevertsOnZeroTokenOrArbiter() public {
         vm.expectRevert(RentEscrow.ZeroAddress.selector);
-        new RentEscrow(IERC20(address(0)), arbiter, address(shares));
+        new RentEscrow(IERC20(address(0)), arbiter, address(shares), address(0));
         vm.expectRevert(RentEscrow.ZeroAddress.selector);
-        new RentEscrow(IERC20(address(usdc)), address(0), address(shares));
+        new RentEscrow(IERC20(address(usdc)), address(0), address(shares), address(0));
     }
 
     // ------------------------------------------------------------------ createLease
@@ -204,14 +205,14 @@ contract RentEscrowTest is Test {
     }
 
     function test_CreateLease_RevertsIfEscrowIsNotShareMinter() public {
-        RentEscrow notMinter = new RentEscrow(IERC20(address(usdc)), arbiter, address(shares));
+        RentEscrow notMinter = new RentEscrow(IERC20(address(usdc)), arbiter, address(shares), address(0));
         vm.prank(landlord);
         vm.expectRevert(abi.encodeWithSelector(LeaseShare1155.NotMinter.selector, address(notMinter)));
         notMinter.createLease(tenant, DEPOSIT, RENT, PERIOD, PERIODS);
     }
 
     function test_CreateLease_SharesDisabled() public {
-        RentEscrow plain = new RentEscrow(IERC20(address(usdc)), arbiter, address(0));
+        RentEscrow plain = new RentEscrow(IERC20(address(usdc)), arbiter, address(0), address(0));
         assertEq(plain.leaseShare(), address(0));
         vm.prank(stranger); // not allowlisted anywhere: fine when shares are disabled
         uint256 id = plain.createLease(tenant, DEPOSIT, RENT, PERIOD, PERIODS);

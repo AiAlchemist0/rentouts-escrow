@@ -7,7 +7,9 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {RentEscrow} from "../src/RentEscrow.sol";
 import {IRentEscrow} from "../src/interfaces/IRentEscrow.sol";
 import {LeaseShare1155} from "../src/LeaseShare1155.sol";
+import {HumanGate} from "../src/HumanGate.sol";
 import {MockUSDC} from "./helpers/MockUSDC.sol";
+import {MockHumanVerifier} from "./helpers/MockHumanVerifier.sol";
 
 /// @notice Drives RentEscrow through random lease lifecycles across several actors and keeps an
 ///         independent ledger of every token transfer out of the escrow (read from the token's
@@ -253,7 +255,10 @@ contract RentEscrowInvariantTest is Test {
         vm.warp(1_700_000_000);
         usdc = new MockUSDC();
         shares = new LeaseShare1155(address(this), "https://rentouts.co/api/lease-share/{id}.json");
-        escrow = new RentEscrow(IERC20(address(usdc)), arbiter, address(shares));
+        // Funding goes through a HumanGate with a verifier plugged in, as it will with World ID.
+        MockHumanVerifier verifier = new MockHumanVerifier();
+        HumanGate gate = new HumanGate(address(this), address(verifier));
+        escrow = new RentEscrow(IERC20(address(usdc)), arbiter, address(shares), address(gate));
         shares.setMinter(address(escrow));
 
         address[] memory actors = new address[](4);
@@ -263,6 +268,7 @@ contract RentEscrowInvariantTest is Test {
         actors[3] = makeAddr("dave");
         for (uint256 i; i < actors.length; i++) {
             shares.setAllowlist(actors[i], true); // every actor may list as a landlord
+            verifier.setVerified(actors[i], true); // and fund as a verified tenant
         }
 
         handler = new EscrowHandler(escrow, usdc, arbiter, keeper, actors);
