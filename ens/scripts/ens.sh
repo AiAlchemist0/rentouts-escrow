@@ -8,6 +8,8 @@
 #   ./scripts/ens.sh claim             mint ENS_DEMO_LABEL to ENS_DEMO_HOLDER    (sends txs)
 #   ./scripts/ens.sh all               parent + subnames + profile + claim
 #   ./scripts/ens.sh removeIssuer      disable ENS_REMOVE_ISSUER (contract + resolver roles) (sends txs)
+#   ./scripts/ens.sh credentialSync    deploy CredentialSync(ESCROW_ADDRESS) + make it an issuer (sends txs)
+#   ./scripts/ens.sh sync              CredentialSync.sync(ENS_SYNC_TENANT), permissionless    (sends txs)
 #
 # Sends nothing unless BROADCAST=true. Without it every phase is a dry-run simulation.
 # Signs with the Foundry keystore account $FOUNDRY_ACCOUNT (default rentouts-deployer):
@@ -64,6 +66,12 @@ case "${1:-status}" in
   profile)  phase profile ;;
   claim)    phase claim ;;
   removeIssuer) phase removeIssuer ;;
+  credentialSync)
+    : "${ESCROW_ADDRESS:?set ESCROW_ADDRESS to the RentEscrow on Sepolia}"; export ESCROW_ADDRESS
+    phase credentialSync ;;
+  sync)
+    : "${ENS_SYNC_TENANT:?set ENS_SYNC_TENANT to the tenant address (must hold a rentouts name)}"; export ENS_SYNC_TENANT
+    phase sync ;;
   all)      need_issuer; phase infra; phase commit; wait_commit; phase register; phase subnames; phase profile; phase claim; phase status ;;
   *) echo "unknown phase: $1"; exit 1 ;;
 esac

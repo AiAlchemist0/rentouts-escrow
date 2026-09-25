@@ -4,6 +4,8 @@ pragma solidity ^0.8.24;
 import {Script, console2} from "forge-std/Script.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 import {RentoutsSubnames} from "../src/RentoutsSubnames.sol";
+import {CredentialSync} from "../src/CredentialSync.sol";
+import {IRentEscrow} from "../src/interfaces/IRentEscrow.sol";
 import {
     ALL_ROLES,
     Grant,
@@ -32,6 +34,8 @@ import {EnsSepolia} from "./EnsSepolia.sol";
 ///           profile()  parent records (addr, url, email, com.twitter, description) from env
 ///           claim()    issuer mints <ENS_DEMO_LABEL>.<parent> to ENS_DEMO_HOLDER (the go/no-go gate)
 ///           removeIssuer() disables ENS_REMOVE_ISSUER on the contract AND revokes its resolver key roles
+///           credentialSync() deploys CredentialSync(ESCROW_ADDRESS, subnames) and makes it an issuer
+///           sync()     calls CredentialSync.sync(ENS_SYNC_TENANT) (permissionless; for the demo)
 ///
 ///         State lives in ens/deployments/sepolia.json and is only written when BROADCAST=true,
 ///         so dry runs never record addresses that don't exist.
@@ -86,6 +90,8 @@ contract DeployEns is Script {
         console2.log("state registry    :", _get("userRegistry"));
         console2.log("state subnames    :", _get("rentoutsSubnames"));
         console2.log("state issuer      :", _get("issuer"));
+        console2.log("state credSync    :", _get("credentialSync"));
+        console2.log("state escrow      :", _get("escrow"));
         if (ETH_REGISTRY.getResolver(label) != address(0)) {
             console2.log("UR text(url)      :", _urText(string.concat(label, ".eth"), "url"));
         }
@@ -96,6 +102,7 @@ contract DeployEns is Script {
             console2.log("UR addr           :", _urAddr(name));
             console2.log("UR credential     :", _urText(name, "rentouts.credential"));
             console2.log("UR status         :", _urText(name, "rentouts.status"));
+            if (_get("credentialSync") != address(0)) _logSynced(name);
         }
     }
 
@@ -270,7 +277,63 @@ contract DeployEns is Script {
         console2.log("issuer removed:", x);
     }
 
+    /// @notice Deploys CredentialSync for ESCROW_ADDRESS (reused if already deployed for the same
+    ///         escrow + subnames) and makes it a RentoutsSubnames issuer. A previous CredentialSync
+    ///         for a different escrow loses its issuer right, so stale stats can't be written.
+    function credentialSync() external {
+        _init();
+        (address resolverAddr, address registryAddr) = _requireInfra();
+        RentoutsSubnames sub = RentoutsSubnames(_get("rentoutsSubnames"));
+        require(address(sub).code.length != 0, "run subnames() first");
+        require(sub.admin() == me, "sender is not the RentoutsSubnames admin");
+        address escrowAddr = vm.envAddress("ESCROW_ADDRESS");
+        require(escrowAddr.code.length != 0, "ESCROW_ADDRESS has no code on this chain");
+        try IRentEscrow(escrowAddr).tenantStats(address(0)) {}
+        catch {
+            revert("ESCROW_ADDRESS does not answer tenantStats(address)");
+        }
+
+        CredentialSync cs = CredentialSync(_get("credentialSync"));
+        bool reuse = address(cs).code.length != 0 && address(cs.escrow()) == escrowAddr
+            && address(cs.subnames()) == address(sub);
+        vm.startBroadcast(me);
+        if (reuse) {
+            console2.log("CredentialSync exists:", address(cs));
+        } else {
+            address old = address(cs);
+            cs = new CredentialSync(IRentEscrow(escrowAddr), sub);
+            console2.log("deployed CredentialSync:", address(cs));
+            if (old.code.length != 0 && sub.isIssuer(old)) sub.setIssuer(old, false);
+        }
+        if (!sub.isIssuer(address(cs))) sub.setIssuer(address(cs), true);
+        vm.stopBroadcast();
+        _save(resolverAddr, registryAddr, address(sub), _get("issuer"), address(cs), escrowAddr);
+    }
+
+    /// @notice Permissionless: anyone may call CredentialSync.sync. The sender here is just who pays gas.
+    function sync() external {
+        _init();
+        CredentialSync cs = CredentialSync(_get("credentialSync"));
+        require(address(cs).code.length != 0, "run credentialSync() first");
+        address tenant = vm.envAddress("ENS_SYNC_TENANT");
+        string memory name = cs.subnames().nameOf(tenant);
+        require(bytes(name).length != 0, "ENS_SYNC_TENANT has no rentouts name");
+        vm.startBroadcast(me);
+        cs.sync(tenant);
+        vm.stopBroadcast();
+        console2.log("synced            :", name);
+        _logSynced(name);
+    }
+
     // ------------------------------------------------------------------------------------ helpers
+
+    function _logSynced(string memory name) internal view {
+        console2.log("UR leasesCompleted:", _urText(name, "rentouts.leasesCompleted"));
+        console2.log("UR disputes       :", _urText(name, "rentouts.disputes"));
+        console2.log("UR rentPaid (USDC):", _urText(name, "rentouts.rentPaid"));
+        console2.log("UR depositReturn %:", _urText(name, "rentouts.depositReturnRate"));
+        console2.log("UR escrow         :", _urText(name, "rentouts.escrow"));
+    }
 
     function _parentIsMine() internal view returns (bool) {
         return ETH_REGISTRY.getOwner(uint256(keccak256(bytes(label)))) == me;
@@ -303,6 +366,12 @@ contract DeployEns is Script {
     }
 
     function _save(address resolver, address registry, address sub, address issuer) internal {
+        _save(resolver, registry, sub, issuer, _get("credentialSync"), _get("escrow"));
+    }
+
+    function _save(address resolver, address registry, address sub, address issuer, address cs, address escrow)
+        internal
+    {
         if (!broadcasting) {
             console2.log("(dry run: state file not written; set BROADCAST=true with --broadcast)");
             return;
@@ -315,6 +384,8 @@ contract DeployEns is Script {
         o.serialize("userRegistry", registry);
         o.serialize("rentoutsSubnames", sub);
         o.serialize("issuer", issuer);
+        if (cs != address(0)) o.serialize("credentialSync", cs);
+        if (escrow != address(0)) o.serialize("escrow", escrow);
         string memory json = o.serialize("universalResolver", EnsSepolia.UNIVERSAL_RESOLVER);
         vm.writeJson(json, _statePath());
     }
