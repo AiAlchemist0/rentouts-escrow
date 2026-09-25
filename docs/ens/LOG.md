@@ -18,10 +18,11 @@ Running, timestamped log of the ENS track (owner: Bektur), updated as we go. Tim
 | `RentoutsSubnames` | [`0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60`](https://eth-sepolia.blockscout.com/address/0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60) — source verified (Sourcify `exact_match`, Blockscout) |
 | Deployer / admin (keystore `rentouts-deployer`) | `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE` |
 | Issuer (keystore `rentouts-issuer`) | `0xF6048B190D178Fb6F0870c65CD2F7E06381713C4` — key-scoped `SET_TEXT` on the six `rentouts.*` keys, **no** root resolver roles |
-| Demo holder (keystore `rentouts-alice`) | `0x484811c8c967809bE644A89d677933c29fb9e936` |
+| Demo holder (keystore `rentouts-alice`) | `0x484811c8c967809bE644A89d677933c29fb9e936` → **`alice.rentouts.eth`** ✅ |
 | Parent records | `addr` = `0x7ed696c879a1a7FD2eD3b49d9982E634a8647eb1` (RentOuts' published address), `url` = `https://rentouts.co`, `email` = `partners@rentouts.co`, `com.twitter` = `RentOuts`, `description` |
 | Machine-readable | [`ens/deployments/sepolia.json`](../../ens/deployments/sepolia.json) |
-| Next | claim `alice.rentouts.eth` → gate; then credential relayer, `app/src/lib/ens.ts`, ENS writeup |
+| Gate | ✅ **passed Fri 22:24** (`alice.rentouts.eth` resolves `addr` + `rentouts.credential`) |
+| Next | credential relayer, `app/src/lib/ens.ts`, ENS writeup |
 
 ---
 
@@ -77,11 +78,20 @@ Running, timestamped log of the ENS track (owner: Bektur), updated as we go. Tim
 
 **22:21 — Demo holder.** Bektur created keystore `rentouts-alice` → `0x484811c8c967809bE644A89d677933c29fb9e936` (clean EOA). Set as `ENS_DEMO_HOLDER`; `claim` dry-run OK. Holder needs no ETH to receive (the deployer mints for her); she only needs gas for `setProfileText`.
 
+**22:23 — Claimed `alice.rentouts.eth`** (Bektur ran `claim`): `register("alice", 0x4848…e936)` [`0x882d63a5…7500`](https://sepolia.etherscan.io/tx/0x882d63a54d344760d5a10dd2455c25796ca3b930e7db50c96d9dea7b5f947500), gas 307 220, status 1.
+
+**22:24 — ✅ GO/NO-GO GATE PASSED** (target was Sat 03:00). Verified on live Sepolia:
+- `cast resolve-name alice.rentouts.eth` → `0x484811c8c967809bE644A89d677933c29fb9e936`
+- Universal Resolver: `rentouts.credential` = `tenant/v1`, `rentouts.status` = `active`
+- `addr(node, 0x80000000|84532)` (Base Sepolia) → same address, via the ENSIP-19 default record
+- `labelOf`/`nameOf` correct; registry owner = alice; expiry = `2^64-1` (never)
+- Soulbound on the real chain: `unsafeTransfer` from alice → `TransferDisallowed`
+
 ---
 
 ## Open items
 
-- [ ] Claim `alice.rentouts.eth` → **gate**.
+- [x] Claim `alice.rentouts.eth` → **gate** (22:24).
 - [ ] Credential relayer (`ens/scripts/sync-credentials.ts`): issuer writes `rentouts.*` from escrow events. Needs the escrow owner to `index` `tenant`/`landlord` in events.
 - [ ] `app/src/lib/ens.ts`: claim step (`simulateContract` for availability, `labelOf(account)` on connect, `normalize()`), profile card (show `rentouts.*` only when `status == active` and `addr` matches).
 - [ ] ENS section of README + `FEEDBACK.md`; paste the exact Tokyo ENS prize text into `docs/ens/PRIZE.md`.
