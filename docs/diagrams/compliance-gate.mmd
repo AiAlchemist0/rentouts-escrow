@@ -1,0 +1,9 @@
+flowchart LR
+  classDef step fill:#12233f,stroke:#5b8def,stroke-width:1.5px,color:#e6efff;
+  classDef gate fill:#0f2e27,stroke:#1fa882,stroke-width:2px,color:#e8fff7;
+  classDef good fill:#0f2e27,stroke:#1fa882,stroke-width:1.5px,color:#b8ffe9;
+  classDef bad fill:#3a1620,stroke:#e5484d,stroke-width:1.5px,color:#ffd7db;
+
+  A["mint / transfer / batch transfer<br/>recipient = to"]:::step --> G{"_update()<br/>allowlisted[to] ?"}:::gate
+  G -->|yes| C["balances updated<br/>(single and batch)"]:::good
+  G -->|no| D["revert NotAllowlisted(to)"]:::bad
