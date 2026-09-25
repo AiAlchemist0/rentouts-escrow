@@ -470,6 +470,35 @@ contract AIArbiterTest is Test {
         vm.stopPrank();
     }
 
+    /// The human's party check is per address, not per person: the human is a trusted role. A lease
+    /// where the human is a party cannot be closed by it, only after the role is handed to another
+    /// address (README: keep the human's address out of every lease; a Safe in production).
+    function test_HumanPartyCheckIsPerAddress() public {
+        vm.prank(landlord);
+        uint256 id = escrow.createLease(human, DEPOSIT, RENT, PERIOD, PERIODS);
+        usdc.mint(human, TOTAL);
+        vm.startPrank(human);
+        usdc.approve(address(escrow), TOTAL);
+        escrow.fundLease(id);
+        escrow.openDispute(id);
+        vm.stopPrank();
+        _propose(id, 0);
+        vm.prank(human); // as the tenant
+        arb.appeal(id);
+        vm.prank(human);
+        vm.expectRevert(abi.encodeWithSelector(AIArbiter.PartyCannotArbitrate.selector, id, human));
+        arb.resolveByHuman(id, 10_000);
+
+        address other = makeAddr("otherHumanKey");
+        vm.prank(human);
+        arb.setHuman(other);
+        vm.prank(other);
+        arb.acceptHuman();
+        vm.prank(other);
+        arb.resolveByHuman(id, 10_000);
+        assertEq(usdc.balanceOf(human), TOTAL); // disputed before any rent was earned: the whole escrow
+    }
+
     // ------------------------------------------------------------------ evidence
 
     function test_Evidence_OnlyPartiesOfADisputedLease() public {

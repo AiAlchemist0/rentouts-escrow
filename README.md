@@ -19,7 +19,7 @@
 | `script/DeployEscrow.s.sol` | Ethereum Sepolia deploy of RentEscrow + LeaseShare1155 + HumanGate (keystore signing) → `"sepolia"` entry of `deployments.json` |
 | `test/DeployEscrow.t.sol` | 15 tests of the deploy script's config checks, wiring and deployment record |
 | `src/AIArbiter.sol` | **AI dispute arbiter**: RentEscrow's arbiter contract. An AI judge proposes a split, either party can appeal within a challenge window, and a human arbiter has the last word |
-| `test/AIArbiter.t.sol`, `test/AIArbiter.invariant.t.sol` | 33 unit/fuzz tests against the real RentEscrow + an invariant suite (AI-1..AI-3) |
+| `test/AIArbiter.t.sol`, `test/AIArbiter.invariant.t.sol` | 34 unit/fuzz tests against the real RentEscrow + an invariant suite (AI-1..AI-3) |
 | `script/DeployAIArbiter.s.sol`, `test/DeployAIArbiter.t.sol` | Sepolia deploy (keystore signing) → `"sepoliaAIArbiter"` entry of `deployments.json`, and 5 tests |
 | [`judge/`](./judge/README.md) | **AI judge service** (TypeScript): reads a disputed lease and both parties' statements, asks GLM 5.3 a fixed checklist, computes the split in code, proposes it to AIArbiter |
 | `deployments.json` | Live contract addresses |
@@ -77,7 +77,7 @@ A handler runs random create / fund / warp / claim / close / dispute / resolve /
 forge test --match-path 'test/RentEscrow*' -vv   # 53 unit/fuzz tests + 4 invariants, ~15 s
 forge test --match-path test/HumanGate.t.sol      # 16 human-gate tests
 forge test --match-path test/DeployEscrow.t.sol   # 15 deploy-script tests
-forge test --match-path 'test/AIArbiter*'         # 33 AIArbiter tests + 3 invariants (AI-1..AI-3)
+forge test --match-path 'test/AIArbiter*'         # 34 AIArbiter tests + 3 invariants (AI-1..AI-3)
 forge test                                        # everything, incl. the 12 LeaseShare1155 tests (134 total)
 ```
 
@@ -146,7 +146,7 @@ Plugging World ID in later is one call from the gate owner, with no escrow redep
 | `bindEscrow(escrow)` | human, once | only an escrow whose arbiter is this contract |
 | `setHuman(new)` → `acceptHuman()` | human, then the nominee | the old human keeps the role until the nominee accepts; `setHuman(0)` cancels |
 
-**Invariant AI-1:** the only state-changing call AIArbiter can make is `escrow.resolveDispute` on the bound escrow. Its other calls are views on that same escrow. The invariant suite state-diff records every call it makes. So a bad AI ruling, or even a stolen agent or human key, can at worst split one disputed lease's escrow wrongly between its own two parties (RentEscrow INV-1 / INV-4). It can never steal. The suite also checks **AI-2**: no token ever reaches the arbiter, the agent, the human or a stranger. It checks **AI-3**: every closed lease was either executed after an unappealed window or ruled by the human, and paid exactly that split. Neither the agent nor the human can rule on a lease it is a party to.
+**Invariant AI-1:** the only state-changing call AIArbiter can make is `escrow.resolveDispute` on the bound escrow. Its other calls are views on that same escrow. The invariant suite state-diff records every call it makes. So a bad AI ruling, or even a stolen agent or human key, can at worst split one disputed lease's escrow wrongly between its own two parties (RentEscrow INV-1 / INV-4). It can never steal. The suite also checks **AI-2**: no token ever reaches the arbiter, the agent, the human or a stranger. It checks **AI-3**: every closed lease was either executed after an unappealed window or ruled by the human, and paid exactly that split. Neither the agent nor the human can rule from an address that is a party to the lease (`PartyCannotArbitrate`). For the agent that is a hard limit. The human is a trusted role, so for it the check only prevents ruling by accident: it could hand the role to another key it controls and rule on its own lease, and a lease where the human is a party can only be closed that way. Keep the human arbiter's address out of every lease (the demo EOA `0x798b…e486` is neither the demo landlord nor alice), and use a Safe in production.
 
 **Deploy order** (RentEscrow's arbiter is immutable):
 
