@@ -18,6 +18,10 @@
 | `test/HumanGate.t.sol` | 16 tests of the human gate: off, open, refusing, verifier swapped later on the same escrow, owner-only |
 | `script/DeployEscrow.s.sol` | Ethereum Sepolia deploy of RentEscrow + LeaseShare1155 + HumanGate (keystore signing) → `"sepolia"` entry of `deployments.json` |
 | `test/DeployEscrow.t.sol` | 15 tests of the deploy script's config checks, wiring and deployment record |
+| `src/AIArbiter.sol` | **AI dispute arbiter**: RentEscrow's arbiter contract. An AI judge proposes a split, either party can appeal within a challenge window, and a human arbiter has the last word |
+| `test/AIArbiter.t.sol`, `test/AIArbiter.invariant.t.sol` | 31 unit/fuzz tests against the real RentEscrow + an invariant suite (AI-1..AI-3) |
+| `script/DeployAIArbiter.s.sol`, `test/DeployAIArbiter.t.sol` | Sepolia deploy (keystore signing) → `"sepoliaAIArbiter"` entry of `deployments.json`, and 5 tests |
+| [`judge/`](./judge/README.md) | **AI judge service** (TypeScript): reads a disputed lease and both parties' statements, asks GLM 5.3 a fixed checklist, computes the split in code, proposes it to AIArbiter |
 | `deployments.json` | Live contract addresses |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Design + diagrams for the deployed contract |
 
@@ -73,7 +77,8 @@ A handler runs random create / fund / warp / claim / close / dispute / resolve /
 forge test --match-path 'test/RentEscrow*' -vv   # 53 unit/fuzz tests + 4 invariants, ~15 s
 forge test --match-path test/HumanGate.t.sol      # 16 human-gate tests
 forge test --match-path test/DeployEscrow.t.sol   # 15 deploy-script tests
-forge test                                        # everything, incl. the 12 LeaseShare1155 tests (97 total)
+forge test --match-path 'test/AIArbiter*'         # 31 AIArbiter tests + 3 invariants (AI-1..AI-3)
+forge test                                        # everything, incl. the 12 LeaseShare1155 tests (134 total)
 ```
 
 Unit tests cover every function and exact custom-error revert, partial / complete claims with `vm.warp`, the close grace rule, cancel, 0 / 5000 / 10000 bps splits (plus a fuzzed split), share minting and the non-allowlisted-landlord revert, re-entry through the ERC-1155 receive hook, the arbiter never being a party, tenant-stats accounting (including how a dispute payout splits into refunded rent, returned deposit and rent paid), and the way out when USDC blacklists the landlord or the tenant.
@@ -112,13 +117,49 @@ Plugging World ID in later is one call from the gate owner, with no escrow redep
 ### Honest limits
 
 - Testnet only: Ethereum Sepolia with **Circle's test USDC**. Hackathon code, not audited.
-- The arbiter is a **single EOA** for the hackathon (a Safe multisig in production; the contract accepts either). It can never be a lease's landlord or tenant and never send funds outside the lease's two parties, but it decides the split, and a disputed lease stays frozen until it rules: there is no timeout or fallback. Either party can open a dispute for as long as the lease is `ACTIVE`, even after the grace window, so a tenant can pre-empt a keeper's `closeLease`; the grace window only guarantees the landlord a turn.
+- The arbiter is a **single EOA** for the hackathon, or `AIArbiter` with a single human EOA behind it (a Safe multisig in production; the contract accepts either). It can never be a lease's landlord or tenant and never send funds outside the lease's two parties, but it decides the split, and a disputed lease stays frozen until it rules: there is no timeout or fallback. Either party can open a dispute for as long as the lease is `ACTIVE`, even after the grace window, so a tenant can pre-empt a keeper's `closeLease`; the grace window only guarantees the landlord a turn.
 - World ID is **not wired in yet**: the deployed `HumanGate` is open (verifier `0`) until a verifier is set. Its owner is the deployer EOA, who can then refuse funding of new leases (never touch existing ones).
 - Earned rent that nobody has claimed when a dispute opens (by either party) is part of the arbiter's pot: it is frozen until the ruling, and a ruling can move part of it to the tenant (for example an arbiter that rules in coarse steps, such as an AI judge's 25% steps). `claimRent` is open to anyone, so a landlord or keeper should claim as periods elapse. `tenantStats` counts only the rent that actually reaches the landlord.
 - `tenantStats` are counts, not weighted by value or term: a landlord and a tenant working together can build a record out of 1-unit, 60-second leases for the cost of gas. The sybil brake is landlord allowlisting on `LeaseShare1155` (only allowlisted landlords can create leases; today only the deployer), so an escrow deployed without lease shares has no brake. A minimum lease term would add real cost; weighting by value would not, since the deposit comes back a minute later.
 - Lease shares minted at `createLease` stay with the landlord if the lease is cancelled (`LeaseShare1155` has no burn).
 - Payouts are pushed, and USDC can blacklist addresses. If the landlord or the tenant is blacklisted, every call that pays them reverts, including the other party's `closeLease` and any split ruling. The other party can still `openDispute` (it moves no tokens), but only a 0 or 10000 bps ruling then pays out, which hands the blocked party's share to the other one (tested with a blacklisting mock). Pull payments (credit a failed transfer, add `withdraw`) would keep the agreed split; not done for the hackathon.
 - The token must be a plain ERC-20 (no fee-on-transfer or rebasing), which USDC is. With shares enabled, a contract landlord must implement `onERC1155Received`.
+
+---
+
+## ⚖️ AI dispute judge: AIArbiter + `judge/` (Ethereum Sepolia)
+
+**One-sentence summary:** when a lease is disputed, an AI judge reads both parties' statements and proposes a split within seconds. A challenge window lets either party appeal to a human arbiter, and the human can rule or override at any time. The AI never moves money on its own.
+
+`src/AIArbiter.sol` is meant to be RentEscrow's (immutable) arbiter. It has two roles:
+
+- **agent**: the judge service key. It can only `propose(leaseId, tenantBps, rulingHash, confidenceBps, summary)` on a `DISPUTED` lease.
+- **human**: the human arbiter EOA, a Safe in production. It can `resolveByHuman(leaseId, tenantBps)` at any time, directly or overriding a proposal, and it sets the agent, the human and the window.
+
+| Call | Who | Effect |
+| --- | --- | --- |
+| `submitEvidence(id, statement)` | tenant or landlord, while `DISPUTED` | `Evidence` event; 1–1000 bytes, at most 5 per party |
+| `propose(id, tenantBps, rulingHash, confidenceBps, summary)` | agent | one proposal per lease; replaceable only while its window runs (the window restarts), never after an appeal |
+| `appeal(id)` | tenant or landlord, inside the window | → only the human can rule |
+| `execute(id)` | anyone, from the deadline, if not appealed | `escrow.resolveDispute(id, tenantBps)` |
+| `resolveByHuman(id, tenantBps)` | human, any time while `DISPUTED` | `escrow.resolveDispute(id, tenantBps)` |
+| `bindEscrow(escrow)` | human, once | only an escrow whose arbiter is this contract |
+
+**Invariant AI-1:** the only state-changing call AIArbiter can make is `escrow.resolveDispute` on the bound escrow. Its other calls are views on that same escrow. The invariant suite state-diff records every call it makes. So a bad AI ruling, or even a stolen agent or human key, can at worst split one disputed lease's escrow wrongly between its own two parties (RentEscrow INV-1 / INV-4). It can never steal. The suite also checks **AI-2**: no token ever reaches the arbiter, the agent, the human or a stranger. It checks **AI-3**: every closed lease was either executed after an unappealed window or ruled by the human, and paid exactly that split. Neither the agent nor the human can rule on a lease it is a party to.
+
+**Deploy order** (RentEscrow's arbiter is immutable):
+
+```bash
+AI_AGENT=<judge address> forge script script/DeployAIArbiter.s.sol --rpc-url sepolia \
+  --account rentouts-deployer --sender <deployer> --broadcast        # AI_HUMAN defaults to 0x798b…e486, AI_CHALLENGE_WINDOW to 120 s
+ESCROW_ARBITER=<aiArbiter> forge script script/DeployEscrow.s.sol --rpc-url sepolia \
+  --account rentouts-deployer --sender <deployer> --broadcast
+cast send <aiArbiter> "bindEscrow(address)" <rentEscrow> --account <human keystore> --rpc-url sepolia
+```
+
+`DeployAIArbiter` records `chainId`, `deployer`, `human`, `agent`, `challengeWindow`, `fromBlock` and `aiArbiter` under a top-level `"sepoliaAIArbiter"` key of `deployments.json`, and only in a real broadcast. The key is separate because `DeployEscrow` runs afterwards and rewrites the whole `"sepolia"` entry.
+
+**The judge** ([`judge/README.md`](./judge/README.md)): `npm run judge -- --lease <id> [--provider glm|mock] [--propose]`. The model (z.ai GLM 5.3; a deterministic mock without a key) answers three narrow yes/no questions, each with a probability: damage beyond normal wear, whether the landlord's claim to the remaining rent is valid, and whether the evidence is sufficient. It also gives a severity from 1 to 5 and a short rationale. **Code** turns the answers into `tenantBps` with a documented rubric, rounded to 0 / 25 / 50 / 75 / 100 %. The judge abstains, escalating to the human, when the evidence is insufficient or any answer's confidence is below 0.7. `rulingHash` is the keccak256 of the canonical JSON ruling, and anyone can recompute it. Statements reach the model as quoted, source-labelled data, and the system prompt treats them as possibly false or manipulative. Limits are in the judge README: an uncalibrated model, text-only evidence, coarse splits, and a human route with no deadline.
 
 ---
 
