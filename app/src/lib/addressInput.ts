@@ -22,7 +22,15 @@ export type ParsedInput =
 export function parseAddressInput(text: string): ParsedInput {
   const value = text.trim()
   if (value === '') return { kind: 'empty' }
-  if (isAddress(value, { strict: false })) return { kind: 'address', address: getAddress(value) }
+  if (isAddress(value, { strict: false })) {
+    // EIP-55: an all-lowercase or all-uppercase address carries no checksum; mixed case must match it.
+    const hex = value.slice(2)
+    const noChecksum = hex === hex.toLowerCase() || hex === hex.toUpperCase()
+    if (!noChecksum && !isAddress(value, { strict: true })) {
+      return { kind: 'error', message: 'This address has an invalid checksum; paste it again.' }
+    }
+    return { kind: 'address', address: getAddress(value) }
+  }
   if (!looksLikeEnsName(value)) return { kind: 'error', message: 'Enter an ENS name (name.eth) or a 0x address.' }
   try {
     return { kind: 'name', name: normalize(value) }

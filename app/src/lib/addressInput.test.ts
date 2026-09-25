@@ -15,6 +15,19 @@ describe('parseAddressInput', () => {
     expect(parseAddressInput('alice')).toMatchObject({ kind: 'error' })
   })
 
+  it('checks EIP-55 checksums on mixed-case addresses', () => {
+    // alice's checksummed address with the last digit changed: the checksum no longer matches.
+    expect(parseAddressInput('0x484811c8c967809bE644A89d677933c29fb9e937')).toEqual({
+      kind: 'error',
+      message: 'This address has an invalid checksum; paste it again.',
+    })
+    expect(parseAddressInput('0x484811C8c967809bE644A89d677933c29fb9e936')).toMatchObject({ kind: 'error' }) // one letter's case flipped
+    // No checksum to check: all lowercase or all uppercase hex.
+    expect(parseAddressInput(alice)).toEqual({ kind: 'address', address: alice })
+    expect(parseAddressInput(`0x${alice.slice(2).toUpperCase()}`)).toEqual({ kind: 'address', address: alice })
+    expect(parseAddressInput(admin.toLowerCase())).toEqual({ kind: 'address', address: admin })
+  })
+
   it('treats a claimable 0x-style label as a name', () => {
     expect(parseAddressInput('0xrent.rentouts.eth')).toEqual({ kind: 'name', name: '0xrent.rentouts.eth' })
     expect(parseAddressInput('0xjudge.rentouts.eth')).toEqual({ kind: 'name', name: '0xjudge.rentouts.eth' })
@@ -29,6 +42,11 @@ describe('resolveAddressInput', () => {
     expect(resolveAddressInput('bob.rentouts.eth', alice, idle)).toEqual({ kind: 'pending' })
     // The field now shows another name; the old name's resolved address must not be sent.
     expect(resolveAddressInput('bob.rentouts.eth', 'alice.rentouts.eth', resolvedTo(alice))).toEqual({ kind: 'pending' })
+  })
+
+  it('does not send an address with a bad checksum', () => {
+    const bad = '0x484811c8c967809bE644A89d677933c29fb9e937'
+    expect(resolveAddressInput(bad, bad, idle)).toMatchObject({ kind: 'error', message: expect.stringMatching(/checksum/) })
   })
 
   it('does not flag half-typed text as an error before the debounce', () => {
