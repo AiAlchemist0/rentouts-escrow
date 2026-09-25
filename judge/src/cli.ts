@@ -10,7 +10,7 @@ import { canonicalJson } from './canonical.ts'
 import { loadDisputeInput, NotDisputedError, type ArbiterState } from './chain.ts'
 import { abstainWithoutModel, confidenceBasis, decide, type Decision } from './decide.ts'
 import { createProvider, isProviderName, PROVIDERS } from './providers/index.ts'
-import { EXIT_STANDING_PROPOSAL, planProposal, sendProposal } from './propose.ts'
+import { EXIT_STANDING_PROPOSAL, MOCK_SUMMARY_PREFIX, planProposal, sendProposal } from './propose.ts'
 import { proposedPath, recordPath, verifyOnchain, verifySaved, writeRecord, type SavedRuling } from './record.ts'
 import type { Address, DisputeInput } from './types.ts'
 
@@ -167,6 +167,10 @@ async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<number> {
   if (values.propose && values.input) throw new UsageError('--propose needs a lease read from the chain, not --input')
   const minConfidence = minConfidenceFromEnv(env)
   const provider = createProvider(values.provider, env, warn)
+  if (provider.name === 'mock' && values.propose) {
+    warn('WARNING: --provider mock is keyword matching, not a judge. A proposal it makes is signed with the agent key')
+    warn(`         like any other; its on-chain summary starts with "${MOCK_SUMMARY_PREFIX.trim()}" and the ruling records provider "mock".`)
+  }
 
   const rpcUrl = values.rpc || env.SEPOLIA_RPC_URL || DEFAULT_RPC
   const record = deploymentsRecord()

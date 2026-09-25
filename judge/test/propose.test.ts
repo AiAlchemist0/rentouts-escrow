@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ArbiterState } from '../src/chain.ts'
-import { EXIT_STANDING_PROPOSAL, planProposal } from '../src/propose.ts'
+import { EXIT_STANDING_PROPOSAL, MAX_SUMMARY_BYTES, MOCK_SUMMARY_PREFIX, planProposal, proposalSummary } from '../src/propose.ts'
 
 const NOW = 1_800_000_000n
 const HASH = `0x${'11'.repeat(32)}` as const
@@ -59,5 +59,21 @@ describe('planProposal: the judge proposes', () => {
 
   it('without --propose nothing is sent', () => {
     expect(planProposal(propose, onchain('NONE'), { propose: false, now: NOW })).toEqual({ send: false, exitCode: 0, lines: [] })
+  })
+})
+
+describe('proposalSummary: what the Proposed event says', () => {
+  const answers = { rationale: 'E2 admits E1.' } as never
+  it('labels a mock ruling on-chain, and leaves a model ruling as its rationale', () => {
+    expect(proposalSummary({ judge: { provider: 'mock', model: 'mock-keywords-v1' }, answers })).toBe(`${MOCK_SUMMARY_PREFIX}E2 admits E1.`)
+    expect(proposalSummary({ judge: { provider: 'mock', model: 'mock-keywords-v1' }, answers })).toMatch(/^\[mock judge, keyword matching\] /)
+    expect(proposalSummary({ judge: { provider: 'glm', model: 'glm-5.3' }, answers })).toBe('E2 admits E1.')
+  })
+
+  it('stays within AIArbiter.MAX_SUMMARY_BYTES with the label', () => {
+    const long = { rationale: 'é'.repeat(800) } as never
+    const s = proposalSummary({ judge: { provider: 'mock', model: 'mock-keywords-v1' }, answers: long })
+    expect(s.startsWith(MOCK_SUMMARY_PREFIX)).toBe(true)
+    expect(new TextEncoder().encode(s).length).toBeLessThanOrEqual(MAX_SUMMARY_BYTES)
   })
 })

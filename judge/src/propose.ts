@@ -26,6 +26,18 @@ export function truncateUtf8(text: string, maxBytes: number): string {
   return `${out}...`
 }
 
+/** Starts the on-chain summary of a proposal made by the mock provider (keyword matching, not a judge). */
+export const MOCK_SUMMARY_PREFIX = '[mock judge, keyword matching] '
+
+/**
+ * The `summary` sent with AIArbiter.propose: the rationale, cut to MAX_SUMMARY_BYTES. A mock ruling
+ * is labelled, because the Proposed event carries no provider (only the ruling file and its hash do).
+ */
+export function proposalSummary(ruling: Pick<Ruling, 'judge' | 'answers'>): string {
+  const prefix = ruling.judge.provider === 'mock' ? MOCK_SUMMARY_PREFIX : ''
+  return prefix + truncateUtf8(ruling.answers?.rationale ?? '', MAX_SUMMARY_BYTES - new TextEncoder().encode(prefix).length)
+}
+
 /** Exit code when the judge abstains but an earlier AI proposal on the lease still stands. */
 export const EXIT_STANDING_PROPOSAL = 3
 
@@ -121,7 +133,7 @@ export async function sendProposal(opts: ProposeOptions): Promise<{ txHash: Hex;
     throw new Error(`keystore "${opts.keystore}" is ${account.address}, but AIArbiter's agent is ${opts.expectedAgent}`)
   }
 
-  const summary = truncateUtf8(ruling.answers?.rationale ?? '', MAX_SUMMARY_BYTES)
+  const summary = proposalSummary(ruling)
   const { request } = await opts.publicClient.simulateContract({
     account,
     address: opts.arbiter,
