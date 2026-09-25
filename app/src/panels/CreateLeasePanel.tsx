@@ -48,7 +48,7 @@ function TenantResolution({ resolved }: { resolved: ResolvedInput }) {
 }
 
 export function CreateLeasePanel() {
-  const { escrow, leaseShare, arbiter, minPeriod, tokenDecimals, tokenSymbol, escrowError } = useContracts()
+  const { escrow, leaseShare, arbiter, minPeriod, tokenDecimals, tokenSymbol, tokenMetaReady, tokenError, escrowError } = useContracts()
   const { address, ready } = useWallet()
   const parent = useParentName()
   const [tenantInput, setTenantInput] = useState('')
@@ -80,7 +80,8 @@ export function CreateLeasePanel() {
 
   const termsValid =
     depositUnits !== null && rentUnits !== null && rentUnits > 0n && periodSeconds !== null && periodCount !== null && !tooShort
-  const canSubmit = !!escrow && ready && !!tenant && termsValid && !partyError && !tx.busy
+  // Amounts are parsed with tokenDecimals, so never before the escrow's token has been read.
+  const canSubmit = !!escrow && ready && tokenMetaReady && !!tenant && termsValid && !partyError && !tx.busy
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
@@ -109,6 +110,7 @@ export function CreateLeasePanel() {
       </div>
 
       {escrowError ? <Notice tone="error">{escrowError}</Notice> : null}
+      {tokenError ? <Notice tone="error">{tokenError}</Notice> : null}
 
       <Field
         label="Tenant"
@@ -177,7 +179,11 @@ export function CreateLeasePanel() {
           <button type="submit" className="btn btn-primary" disabled={!canSubmit}>
             Create lease
           </button>
-          {!ready ? <span className="hint">Connect MetaMask on Sepolia to create a lease.</span> : null}
+          {!ready ? (
+            <span className="hint">Connect MetaMask on Sepolia to create a lease.</span>
+          ) : !tokenMetaReady && !tokenError ? (
+            <span className="hint">Reading the escrow’s token…</span>
+          ) : null}
         </div>
       )}
       <TxStatus state={tx.state} done={createdId !== null ? `Lease #${createdId} created.` : 'Lease created.'} />

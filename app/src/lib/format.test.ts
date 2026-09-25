@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatCountdown, formatDuration, formatToken, parseToken, parseWhole, shortAddress } from './format'
+import { formatCountdown, formatDuration, formatToken, parseToken, parseWhole, shortAddress, tokenMetaFrom } from './format'
 import { leasePartyProblem, leaseTiming, totalDue } from './lease'
 
 describe('USDC formatting (6 decimals)', () => {
@@ -86,5 +86,26 @@ describe('lease parties (RentEscrow.createLease InvalidTerms rules)', () => {
     expect(leasePartyProblem(arbiter, tenant, arbiter)).toMatch(/arbiter can’t be the landlord or the tenant/)
     expect(leasePartyProblem(arbiter, undefined, arbiter)).toMatch(/arbiter/)
     expect(leasePartyProblem(landlord, arbiter.toLowerCase() as `0x${string}`, arbiter)).toMatch(/arbiter/)
+  })
+})
+
+describe('tokenMetaFrom', () => {
+  const usdc = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'
+  const ok = <T,>(value: T): PromiseSettledResult<T> => ({ status: 'fulfilled', value })
+  const failed = (reason: unknown): PromiseSettledResult<never> => ({ status: 'rejected', reason })
+
+  it('uses what the token reports', () => {
+    expect(tokenMetaFrom(usdc, ok(6), ok('USDC'))).toEqual({ decimals: 6, symbol: 'USDC' })
+    expect(tokenMetaFrom(usdc, ok(18), ok('WETH'))).toEqual({ decimals: 18, symbol: 'WETH' })
+  })
+
+  it('keeps decimals when only symbol() fails, labelling the token by address', () => {
+    expect(tokenMetaFrom(usdc, ok(18), failed(new Error('symbol reverted')))).toEqual({ decimals: 18, symbol: '0x1c7D…7238' })
+    expect(tokenMetaFrom(usdc, ok(18), ok(' '))).toEqual({ decimals: 18, symbol: '0x1c7D…7238' })
+  })
+
+  it('refuses to guess decimals', () => {
+    const reason = new Error('decimals reverted')
+    expect(() => tokenMetaFrom(usdc, failed(reason), ok('USDC'))).toThrow(reason)
   })
 })

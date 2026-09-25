@@ -33,6 +33,22 @@ export function shortAddress(address: string): string {
   return address.length > 12 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address
 }
 
+export type TokenMeta = { decimals: number; symbol: string }
+
+/**
+ * A token's decimals() and symbol(), read separately. Amounts are built from decimals, so a failed decimals()
+ * read throws rather than guessing; a failed symbol() only costs the label, which falls back to the short address.
+ */
+export function tokenMetaFrom(
+  token: Address,
+  decimals: PromiseSettledResult<number>,
+  symbol: PromiseSettledResult<string>,
+): TokenMeta {
+  if (decimals.status === 'rejected') throw decimals.reason
+  const label = symbol.status === 'fulfilled' && symbol.value.trim() !== '' ? symbol.value : shortAddress(token)
+  return { decimals: decimals.value, symbol: label }
+}
+
 /** 75 -> "1m 15s", 7260 -> "2h 1m". */
 export function formatDuration(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds))

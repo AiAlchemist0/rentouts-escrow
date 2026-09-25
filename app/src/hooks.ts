@@ -24,6 +24,7 @@ import { parseAddressInput, resolveAddressInput, type ResolvedInput } from './li
 import { judgeFor, type ArbiterLog, type Ruling } from './lib/aiJudge'
 import { labelId, labelUnder, type CredentialRecords } from './lib/credential'
 import { errorMessage } from './lib/errors'
+import { tokenMetaFrom } from './lib/format'
 import type { HumanGateView } from './lib/humanGate'
 import { recordTx } from './txLog'
 
@@ -70,8 +71,13 @@ export type AppContracts = {
   humanGate?: Address
   minPeriod?: number
   sharesPerLease?: bigint
+  /** Display values: 6 / 'USDC' until the token is read. Build amounts only once tokenMetaReady. */
   tokenDecimals: number
   tokenSymbol: string
+  /** decimals() of the escrow's own token() is read, so amounts can be built from tokenDecimals. */
+  tokenMetaReady: boolean
+  /** Set when the token's decimals() can't be read. */
+  tokenError?: string
   /** Set when VITE_ESCROW_ADDRESS is configured but can't be read. */
   escrowError?: string
 }
@@ -113,11 +119,11 @@ export function useContracts(): AppContracts {
     queryKey: ['token-meta', token],
     staleTime: Infinity,
     queryFn: async () => {
-      const [decimals, symbol] = await Promise.all([
+      const [decimals, symbol] = await Promise.allSettled([
         client.readContract({ address: token, abi: erc20Abi, functionName: 'decimals' }),
         client.readContract({ address: token, abi: erc20Abi, functionName: 'symbol' }),
       ])
-      return { decimals, symbol }
+      return tokenMetaFrom(token, decimals, symbol)
     },
   })
 
@@ -132,6 +138,11 @@ export function useContracts(): AppContracts {
     sharesPerLease: onChain?.sharesPerLease,
     tokenDecimals: tokenMeta.data?.decimals ?? 6,
     tokenSymbol: tokenMeta.data?.symbol ?? 'USDC',
+    // With an escrow configured, `token` is only a hint until escrow.token() is read.
+    tokenMetaReady: tokenMeta.isSuccess && (!escrow || escrowConfig.isSuccess),
+    tokenError: tokenMeta.isError
+      ? `Couldn’t read decimals() from the token at ${token}. (${errorMessage(tokenMeta.error)})`
+      : undefined,
     escrowError: escrowConfig.isError
       ? `Couldn’t read RentEscrow at ${escrow}. Check VITE_ESCROW_ADDRESS or deployments.json. (${errorMessage(escrowConfig.error)})`
       : undefined,
