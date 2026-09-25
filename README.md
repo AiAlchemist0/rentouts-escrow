@@ -250,7 +250,7 @@ Tenants get a soulbound `<name>.rentouts.eth` subname on the ENSv2 beta. Its `re
 
 ## Architecture
 
-Full write-up + diagrams: **[ARCHITECTURE.md](./ARCHITECTURE.md)**. `LeaseShare1155` tokenizes a lease/deposit as a permissioned ERC-1155 (`tokenId == leaseId`); every recipient is checked against a compliance allowlist in the OZ v5 `_update` hook, so shares can only move between approved wallets.
+Full write-up + diagrams: **[ARCHITECTURE.md](./ARCHITECTURE.md)**, covering the whole system: escrow, AI dispute judge, human gate (World ID seam), ENS identity and lease shares. The diagram below is the lease-share part. `LeaseShare1155` tokenizes a lease/deposit as a permissioned ERC-1155 (`tokenId == leaseId`); every recipient is checked against a compliance allowlist in the OZ v5 `_update` hook, so shares can only move between approved wallets.
 
 ```mermaid
 flowchart TB
@@ -260,9 +260,9 @@ flowchart TB
   classDef bad fill:#3a1620,stroke:#e5484d,stroke-width:1.5px,color:#ffd7db;
 
   Owner["Issuer / Owner (RentOuts)"]:::actor
-  Escrow["RentEscrow (coming - the spine)"]:::actor
+  Escrow["RentEscrow (minter on the Ethereum Sepolia deploy)"]:::actor
 
-  subgraph Chain["Base Sepolia - LeaseShare1155 - Sourcify verified"]
+  subgraph Chain["LeaseShare1155 - Base Sepolia standalone, Sourcify verified - integrated on Ethereum Sepolia"]
     LS["LeaseShare1155 (ERC-1155)<br/>tokenId equals leaseId<br/>allowlisted mapping<br/>_update compliance gate<br/>mintShare: minter or owner only"]:::contract
   end
 
@@ -309,3 +309,19 @@ forge script script/DeployLeaseShare.s.sol --rpc-url base_sepolia --broadcast --
 
 ## License
 [MIT](./LICENSE)
+
+---
+
+## Documentation
+
+For judges and reviewers: how the whole project fits together (escrow, AI dispute judge, human gate, ENS identity and RWA shares, all on Ethereum Sepolia).
+
+| Doc | What's in it |
+| --- | --- |
+| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Component map, roles and trust model, lease state machine, sequence diagrams for every flow (including the human gate and the AI dispute judge), the `LeaseShare1155` compliance gate, invariants and tests, ENS record schema, deployments and deploy order, known limitations, repo layout |
+| [`docs/DECISIONS.md`](./docs/DECISIONS.md) | Architecture decision records: one chain, non-custodial prepaid escrow, split-only arbiter, Circle USDC, on-chain credentials, soulbound ENS names, revocation, issuer roles, lease shares, the human-gate seam, the AI judge that only proposes |
+| [`docs/PLAN.md`](./docs/PLAN.md) | Scope, weekend timeline (done / next), deploy order, sponsor-track mapping, review and merge process |
+| [`docs/DEMO.md`](./docs/DEMO.md) | The ~3-minute judge demo: which wallet does what, pre-flight, the dispute and AI-judge beat, fallbacks, CLI proofs |
+| [`docs/ens/LOG.md`](./docs/ens/LOG.md) | Running ENS track log with transaction hashes |
+
+Diagrams are Mermaid and render on GitHub.
