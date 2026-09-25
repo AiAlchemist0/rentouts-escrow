@@ -286,6 +286,15 @@ contract RentEscrowInvariantTest is Test {
         targetContract(address(handler));
     }
 
+    /// Coverage guard, not an escrow invariant: every run must settle at least one lease (close or
+    /// ruling), so INV-1..INV-4 are checked against real payouts and not just creation and funding.
+    /// Kept loose on purpose: at depth 256 each path is hit in nearly every run, but a per-path
+    /// minimum could flake (claimRent's measured minimum is 1).
+    function afterInvariant() public {
+        uint256 settled = handler.calls("closeLease") + handler.calls("resolveDispute");
+        assertGt(settled, 0, "run settled no lease: the handler never reached close or resolve");
+    }
+
     /// INV-1: funds only ever move to the lease's tenant or landlord (no owner, no fee, no admin).
     function invariant_INV1_FundsOnlyReachLeaseParties() public {
         assertEq(handler.ghostOutToNonParty(), 0, "escrow paid a non-party");

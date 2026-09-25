@@ -65,12 +65,12 @@ A handler runs random create / fund / warp / claim / close / dispute / resolve /
 - **INV-3** rent released for a lease never exceeds `rentPerPeriod × elapsed periods` (capped at the term).
 - **INV-4** a dispute resolution pays out exactly the lease's remaining escrow, split by `tenantBps`.
 
-64 runs × 64 calls, `fail_on_revert = true` (the handler only makes valid calls, so any revert is a bug). As a sanity check, each of these injected bugs breaks the suite: dropping the term cap, paying the arbiter, leaving a closed lease's balance, rounding the split up.
+64 runs × 256 calls, `fail_on_revert = true` (the handler only makes valid calls, so any revert is a bug). At depth 64 up to half the runs never reached `closeLease` (and 13–25 of 64 never reached `resolveDispute` or `claimRent`); at 256 every measured run reached all three, and an `afterInvariant` guard fails any run that settles no lease. As a sanity check, each of these injected bugs breaks the suite: dropping the term cap, paying the arbiter, leaving a closed lease's balance, rounding the split up.
 
 ### Test
 
 ```bash
-forge test --match-path 'test/RentEscrow*' -vv   # 53 unit/fuzz tests + 4 invariants, ~2 s
+forge test --match-path 'test/RentEscrow*' -vv   # 53 unit/fuzz tests + 4 invariants, ~15 s
 forge test --match-path test/HumanGate.t.sol      # 16 human-gate tests
 forge test --match-path test/DeployEscrow.t.sol   # 15 deploy-script tests
 forge test                                        # everything, incl. the 12 LeaseShare1155 tests (97 total)

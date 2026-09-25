@@ -19,10 +19,11 @@ fs_permissions = [
 ]
 
 # RentEscrow invariant suite (test/RentEscrow.invariant.t.sol): the handler only makes valid
-# calls, so any revert is a bug.
+# calls, so any revert is a bug. depth 256, not 64: at 64 up to half the runs never reached
+# close / resolve / claim; at 256 every measured run did (afterInvariant: each run settles a lease).
 [invariant]
 runs = 64
-depth = 64
+depth = 256
 fail_on_revert = true
 
 [rpc_endpoints]
