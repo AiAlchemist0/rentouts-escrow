@@ -18,6 +18,10 @@
 | `test/HumanGate.t.sol` | 16 tests of the human gate: off, open, refusing, verifier swapped later on the same escrow, owner-only |
 | `script/DeployEscrow.s.sol` | Ethereum Sepolia deploy of RentEscrow + LeaseShare1155 + HumanGate (keystore signing) → `"sepolia"` entry of `deployments.json` |
 | `test/DeployEscrow.t.sol` | 15 tests of the deploy script's config checks, wiring and deployment record |
+| `src/AIArbiter.sol` | **AI dispute arbiter**: RentEscrow's arbiter contract. An AI judge proposes a split, either party can appeal within a challenge window, and a human arbiter has the last word |
+| `test/AIArbiter.t.sol`, `test/AIArbiter.invariant.t.sol` | 34 unit/fuzz tests against the real RentEscrow + an invariant suite (AI-1..AI-3) |
+| `script/DeployAIArbiter.s.sol`, `test/DeployAIArbiter.t.sol` | Sepolia deploy (keystore signing) → `"sepoliaAIArbiter"` entry of `deployments.json`, and 5 tests |
+| [`judge/`](./judge/README.md) | **AI judge service** (TypeScript): reads a disputed lease and both parties' statements, asks GLM 5.3 a fixed checklist, computes the split in code, proposes it to AIArbiter |
 | `deployments.json` | Live contract addresses |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Design + diagrams for the deployed contract |
 
@@ -56,6 +60,8 @@ The escrow has no owner and cannot change, yet World ID has to be added later. T
 
 The gate owner can only decide **who may fund a new lease**. It holds no tokens and cannot move, freeze or redirect funds. `claimRent`, `closeLease`, `openDispute` and `resolveDispute` never consult it, so a funded lease runs to the end whatever the gate says (tested). If the verifier reverts, funding fails closed until the owner fixes or clears it.
 
+**Live:** the Sepolia escrow's gate is `HumanGate` [`0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd`](https://eth-sepolia.blockscout.com/address/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) (owner: the deployer; verifier `0`, so open). Its deploy tx and verification status are in the Live on Ethereum Sepolia table below.
+
 ### Invariants (`test/RentEscrow.invariant.t.sol`)
 
 A handler runs random create / fund / warp / claim / close / dispute / resolve / cancel sequences across four actors (funding through a `HumanGate` with a verifier that approves them), a keeper and the arbiter, and books every token transfer out of the escrow from the token's own `Transfer` logs:
@@ -73,7 +79,8 @@ A handler runs random create / fund / warp / claim / close / dispute / resolve /
 forge test --match-path 'test/RentEscrow*' -vv   # 53 unit/fuzz tests + 4 invariants, ~15 s
 forge test --match-path test/HumanGate.t.sol      # 16 human-gate tests
 forge test --match-path test/DeployEscrow.t.sol   # 15 deploy-script tests
-forge test                                        # everything, incl. the 12 LeaseShare1155 tests (97 total)
+forge test --match-path 'test/AIArbiter*'         # 34 AIArbiter tests + 3 invariants (AI-1..AI-3)
+forge test                                        # everything, incl. the 12 LeaseShare1155 tests (137 total)
 ```
 
 Unit tests cover every function and exact custom-error revert, partial / complete claims with `vm.warp`, the close grace rule, cancel, 0 / 5000 / 10000 bps splits (plus a fuzzed split), share minting and the non-allowlisted-landlord revert, re-entry through the ERC-1155 receive hook, the arbiter never being a party, tenant-stats accounting (including how a dispute payout splits into refunded rent, returned deposit and rent paid), and the way out when USDC blacklists the landlord or the tenant.
@@ -107,18 +114,88 @@ Plugging World ID in later is one call from the gate owner, with no escrow redep
 
 **Demo amounts:** the ETHGlobal faucet hands out 1 USDC on Sepolia per claim, so keep demo leases small. For example, `createLease(tenant, 300000, 100000, 60, 3)` escrows a 0.30 USDC deposit + 3 × 0.10 USDC rent at 60-second periods (0.60 USDC total).
 
-- **Deployed addresses (Ethereum Sepolia):** _TBD — written to the `"sepolia"` entry of `deployments.json` by the deploy script_
+### 🟢 Live on Ethereum Sepolia
+
+Chain id 11155111. Deployed on 2026-09-25 (18:05–18:07 UTC) by `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE`: first `DeployAIArbiter`, then `DeployEscrow` with `ESCROW_ARBITER` set to the AIArbiter (its own table is in the AI dispute judge section below). The addresses are also in the `"sepolia"` entry of [`deployments.json`](./deployments.json).
+
+| Contract | Address | Explorers | Deploy tx | Source verified |
+| --- | --- | --- | --- | --- |
+| `RentEscrow` | `0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18` | [Etherscan](https://sepolia.etherscan.io/address/0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18) · [Blockscout](https://eth-sepolia.blockscout.com/address/0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18) | [`0xf8b1d3c0…5c8f00`](https://sepolia.etherscan.io/tx/0xf8b1d3c05a146a85205a215e96e3c3c1eb20015db12323cdc7013eae795c8f00) | [Sourcify](https://repo.sourcify.dev/11155111/0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18) exact match · Blockscout verified · Etherscan not yet |
+| `LeaseShare1155` | `0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09` | [Etherscan](https://sepolia.etherscan.io/address/0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09) · [Blockscout](https://eth-sepolia.blockscout.com/address/0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09) | [`0x05ce482f…24f64b`](https://sepolia.etherscan.io/tx/0x05ce482f57de77b09f73efed346c889b0f6012c3a0b426f8bc76abf7e124f64b) | [Sourcify](https://repo.sourcify.dev/11155111/0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09) exact match · Blockscout verified · Etherscan not yet |
+| `HumanGate` | `0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd` | [Etherscan](https://sepolia.etherscan.io/address/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) · [Blockscout](https://eth-sepolia.blockscout.com/address/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) | [`0x2351a01f…89c232`](https://sepolia.etherscan.io/tx/0x2351a01fdc504feeb7bd8026029c287765e16568aa8370431a498e089e89c232) | [Sourcify](https://repo.sourcify.dev/11155111/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) exact match · Blockscout verified · Etherscan not yet |
+
+Wiring, as read back on-chain:
+
+- `RentEscrow`: `token` = Circle test USDC [`0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`](https://sepolia.etherscan.io/address/0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238), `arbiter` = `AIArbiter` `0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5`, `leaseShare` and `humanGate` = the two contracts above. All four are immutable.
+- `LeaseShare1155`: owner = the deployer, `minter` = `RentEscrow` ([`setMinter` tx `0xc0d8b854…149f84`](https://sepolia.etherscan.io/tx/0xc0d8b854aad94e8fd1cab7488c2e3f29390aa5af2d5127dd2236298534149f84)), and the deployer is allowlisted as the demo landlord. It is a new share contract for this escrow, separate from the standalone `LeaseShare1155` on Base Sepolia (Curvegrid section below).
+- `HumanGate`: owner = the deployer, `verifier` = `0`, so the gate is open until World ID is plugged in.
+- `CredentialSync` [`0xd0783EC7B0668652718f3977Ca92235fe6bF9c56`](https://eth-sepolia.blockscout.com/address/0xd0783EC7B0668652718f3977Ca92235fe6bF9c56) (on the `ens-integration` branch) reads this escrow's `tenantStats` into the tenant's `rentouts.*` ENS records. It is verified the same way (Sourcify exact match, Blockscout verified, not yet on Etherscan).
+
+"Exact match" means Sourcify reproduced both the creation and the runtime bytecode from the source, metadata hash included (solc 0.8.24, or 0.8.28 for `CredentialSync`; `cancun`, optimizer 200 runs, no via-IR). Blockscout imported the source from Sourcify. Etherscan only takes submissions with an API key, so it has none yet. To add it: `forge verify-contract <address> <Contract> --chain sepolia --verifier etherscan --guess-constructor-args --rpc-url sepolia --watch` with `ETHERSCAN_API_KEY` set.
 
 ### Honest limits
 
 - Testnet only: Ethereum Sepolia with **Circle's test USDC**. Hackathon code, not audited.
-- The arbiter is a **single EOA** for the hackathon (a Safe multisig in production; the contract accepts either). It can never be a lease's landlord or tenant and never send funds outside the lease's two parties, but it decides the split, and a disputed lease stays frozen until it rules: there is no timeout or fallback. Either party can open a dispute for as long as the lease is `ACTIVE`, even after the grace window, so a tenant can pre-empt a keeper's `closeLease`; the grace window only guarantees the landlord a turn.
+- The arbiter is a **single EOA** for the hackathon, or `AIArbiter` with a single human EOA behind it (a Safe multisig in production; the contract accepts either). It can never be a lease's landlord or tenant and never send funds outside the lease's two parties, but it decides the split, and a disputed lease stays frozen until it rules: there is no timeout or fallback. Either party can open a dispute for as long as the lease is `ACTIVE`, even after the grace window, so a tenant can pre-empt a keeper's `closeLease`; the grace window only guarantees the landlord a turn.
 - World ID is **not wired in yet**: the deployed `HumanGate` is open (verifier `0`) until a verifier is set. Its owner is the deployer EOA, who can then refuse funding of new leases (never touch existing ones).
 - Earned rent that nobody has claimed when a dispute opens (by either party) is part of the arbiter's pot: it is frozen until the ruling, and a ruling can move part of it to the tenant (for example an arbiter that rules in coarse steps, such as an AI judge's 25% steps). `claimRent` is open to anyone, so a landlord or keeper should claim as periods elapse. `tenantStats` counts only the rent that actually reaches the landlord.
 - `tenantStats` are counts, not weighted by value or term: a landlord and a tenant working together can build a record out of 1-unit, 60-second leases for the cost of gas. The sybil brake is landlord allowlisting on `LeaseShare1155` (only allowlisted landlords can create leases; today only the deployer), so an escrow deployed without lease shares has no brake. A minimum lease term would add real cost; weighting by value would not, since the deposit comes back a minute later.
 - Lease shares minted at `createLease` stay with the landlord if the lease is cancelled (`LeaseShare1155` has no burn).
 - Payouts are pushed, and USDC can blacklist addresses. If the landlord or the tenant is blacklisted, every call that pays them reverts, including the other party's `closeLease` and any split ruling. The other party can still `openDispute` (it moves no tokens), but only a 0 or 10000 bps ruling then pays out, which hands the blocked party's share to the other one (tested with a blacklisting mock). Pull payments (credit a failed transfer, add `withdraw`) would keep the agreed split; not done for the hackathon.
 - The token must be a plain ERC-20 (no fee-on-transfer or rebasing), which USDC is. With shares enabled, a contract landlord must implement `onERC1155Received`.
+
+---
+
+## ⚖️ AI dispute judge: AIArbiter + `judge/` (Ethereum Sepolia)
+
+**One-sentence summary:** when a lease is disputed, an AI judge reads both parties' statements and proposes a split within seconds. A challenge window lets either party appeal to a human arbiter, and the human can rule or override at any time. The AI never moves money on its own.
+
+`src/AIArbiter.sol` is meant to be RentEscrow's (immutable) arbiter. It has two roles:
+
+- **agent**: the judge service key. It can only `propose(leaseId, tenantBps, rulingHash, confidenceBps, summary)` on a `DISPUTED` lease.
+- **human**: the human arbiter EOA, a Safe in production. It can `resolveByHuman(leaseId, tenantBps)` at any time, directly or overriding a proposal, and it sets the agent and the window. It hands its own role over in two steps, `setHuman(new)` then `acceptHuman()` from the new address, so a mistyped address cannot strand appealed leases (only the human can close those).
+
+| Call | Who | Effect |
+| --- | --- | --- |
+| `submitEvidence(id, statement)` | tenant or landlord, while `DISPUTED` | `Evidence` event; 1–1000 bytes, at most 5 per party |
+| `propose(id, tenantBps, rulingHash, confidenceBps, summary)` | agent | one proposal per lease; replaceable only while its window runs (the window restarts), never after an appeal |
+| `appeal(id)` | tenant or landlord, inside the window | → only the human can rule |
+| `execute(id)` | anyone, from the deadline, if not appealed | `escrow.resolveDispute(id, tenantBps)` |
+| `resolveByHuman(id, tenantBps)` | human, any time while `DISPUTED` | `escrow.resolveDispute(id, tenantBps)` |
+| `bindEscrow(escrow)` | human, once | only an escrow whose arbiter is this contract |
+| `setHuman(new)` → `acceptHuman()` | human, then the nominee | the old human keeps the role until the nominee accepts; `setHuman(0)` cancels |
+
+**Invariant AI-1:** the only state-changing call AIArbiter can make is `escrow.resolveDispute` on the bound escrow. Its other calls are views on that same escrow. The invariant suite state-diff records every call it makes. So a bad AI ruling, or even a stolen agent or human key, can at worst split one disputed lease's escrow wrongly between its own two parties (RentEscrow INV-1 / INV-4). It can never steal. The suite also checks **AI-2**: no token ever reaches the arbiter, the agent, the human or a stranger. It checks **AI-3**: every closed lease was either executed after an unappealed window or ruled by the human, and paid exactly that split. Neither the agent nor the human can rule from an address that is a party to the lease (`PartyCannotArbitrate`). For the agent that is a hard limit. The human is a trusted role, so for it the check only prevents ruling by accident: it could hand the role to another key it controls and rule on its own lease, and a lease where the human is a party can only be closed that way. Keep the human arbiter's address out of every lease (the demo EOA `0x798b…e486` is neither the demo landlord nor alice), and use a Safe in production.
+
+**Deploy order** (RentEscrow's arbiter is immutable):
+
+```bash
+AI_AGENT=<judge address> forge script script/DeployAIArbiter.s.sol --rpc-url sepolia \
+  --account rentouts-deployer --sender <deployer> --broadcast        # AI_HUMAN defaults to 0x798b…e486, AI_CHALLENGE_WINDOW to 120 s
+ESCROW_ARBITER=<aiArbiter> forge script script/DeployEscrow.s.sol --rpc-url sepolia \
+  --account rentouts-deployer --sender <deployer> --broadcast
+cast send <aiArbiter> "bindEscrow(address)" <rentEscrow> --account <human keystore> --rpc-url sepolia
+```
+
+`DeployAIArbiter` records `chainId`, `deployer`, `human`, `agent`, `challengeWindow`, `fromBlock` and `aiArbiter` under a top-level `"sepoliaAIArbiter"` key of `deployments.json`, and only in a real broadcast. The key is separate because `DeployEscrow` runs afterwards and rewrites the whole `"sepolia"` entry.
+
+### 🟢 Live on Ethereum Sepolia
+
+| | |
+| --- | --- |
+| `AIArbiter` | `0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5`: [Etherscan](https://sepolia.etherscan.io/address/0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5) · [Blockscout](https://eth-sepolia.blockscout.com/address/0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5) |
+| Network | Ethereum Sepolia (chainId 11155111) |
+| Deploy tx | [`0xc82a9176…b47977a`](https://sepolia.etherscan.io/tx/0xc82a9176171588129ef6244ab9f655b39319a661456d0daedbf7d7673b47977a) (block 11780903, deployer `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE`) |
+| `bindEscrow` tx | [`0xe4771261…5088b875`](https://sepolia.etherscan.io/tx/0xe47712614a63eec77c960c9f27cd31ed34de7d2e7bc3a4b0098172195088b875), sent by the human: bound to `RentEscrow` `0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18`, whose immutable arbiter is this contract |
+| agent | `0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA` (the judge service key) |
+| human | `0x798b01Cef62b889943Ce1D3C5011a755B297e486` (demo human arbiter EOA) |
+| Challenge window | 120 s (live-demo setting) |
+| `fromBlock` | 11780900 (where `judge/` starts scanning for `Evidence` / `DisputeOpened`) |
+| Source verified | [Sourcify](https://repo.sourcify.dev/11155111/0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5) exact match (creation + runtime, solc 0.8.24) · Blockscout verified · Etherscan not yet (needs an API key) |
+
+The same values are in the `"sepoliaAIArbiter"` entry of [`deployments.json`](./deployments.json). The escrow, share and gate addresses are in the RentEscrow section's Live on Ethereum Sepolia table.
+
+**The judge** ([`judge/README.md`](./judge/README.md)): `npm run judge -- --lease <id> [--provider glm|mock] [--propose]`. The model (z.ai GLM 5.3; a deterministic mock without a key) answers three narrow yes/no questions, each with a probability: damage beyond normal wear, whether the landlord's claim to the remaining rent is valid, and whether the evidence is sufficient. It also gives a severity from 1 to 5 and a short rationale. **Code** turns the answers into `tenantBps` with a documented rubric, rounded to 0 / 25 / 50 / 75 / 100 %. The judge abstains, escalating to the human, when the evidence is insufficient, when an answer the payout rests on has a confidence below 0.7, when only one party has posted, or when a statement tries to steer the judge (a code-level screen that runs whatever the model answered). `rulingHash` is the keccak256 of the canonical JSON ruling; anyone can recompute it from the saved file and check it against the chain (`--verify <file> --onchain`). Statements reach the model as quoted, source-labelled data, and the system prompt treats them as possibly false or manipulative. Limits are in the judge README: an uncalibrated model, text-only evidence, coarse splits, and a human route with no deadline.
 
 ---
 
@@ -202,15 +279,21 @@ flowchart TB
 Requires [Foundry](https://getfoundry.sh).
 
 ```bash
-# 1. Install dependencies (OpenZeppelin v5)
-forge install OpenZeppelin/openzeppelin-contracts@v5.1.0 --no-commit
+# 1. Install dependencies (OpenZeppelin v5.1, which brings forge-std along; see remappings.txt).
+#    --no-git: a plain copy under the gitignored lib/, not a git submodule
+forge install OpenZeppelin/openzeppelin-contracts@v5.1.0 --no-git
 
-# 2. Build + test
+# 2. Build + test the contracts
 forge build
 forge test -vv
+
+# 3. Test the AI judge service (Node >= 24)
+cd judge && npm ci && npx vitest run
 ```
 
-Expected: **12 passing** `LeaseShare1155` tests — mint/transfer/batch allowlist gating, revoke-mid-life, access control, and `testFuzz_TransferToRandom_RejectedUnlessAllowlisted` (256 runs) proving the compliance gate.
+Expected: **137 passing** Foundry tests in 9 suites: 12 `LeaseShare1155`, 53 `RentEscrow` unit/fuzz (4 of them with a blacklisting token), 16 `HumanGate`, 15 `DeployEscrow`, 34 `AIArbiter` and 5 `DeployAIArbiter` tests, plus the `RentEscrow` and `AIArbiter` invariant suites, which forge counts as one test each. The `LeaseShare1155` tests cover mint/transfer/batch allowlist gating, revoke-mid-life, access control, and `testFuzz_TransferToRandom_RejectedUnlessAllowlisted` (256 runs) proving the compliance gate.
+
+The judge: **92 passing** vitest tests in 12 files. One of them reads a throwaway keystore made by `cast wallet new`, so it is skipped when `cast` is not on PATH (91 passed, 1 skipped).
 
 ### Deploy to Base Sepolia
 

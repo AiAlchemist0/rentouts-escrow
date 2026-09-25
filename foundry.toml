@@ -11,11 +11,13 @@ remappings = [
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "forge-std/=lib/openzeppelin-contracts/lib/forge-std/src/",
 ]
-# script/DeployEscrow.s.sol records the "sepolia" entry of deployments.json (only in a --broadcast /
-# --resume run); test/DeployEscrow.t.sol checks that on a scratch copy under cache/.
+# script/DeployEscrow.s.sol records the "sepolia" entry of deployments.json and
+# script/DeployAIArbiter.s.sol the "sepoliaAIArbiter" entry (only in a --broadcast / --resume run);
+# test/DeployEscrow.t.sol and test/DeployAIArbiter.t.sol check that on scratch copies under cache/.
 fs_permissions = [
     { access = "read-write", path = "./deployments.json" },
     { access = "read-write", path = "./cache/deploy-escrow-test" },
+    { access = "read-write", path = "./cache/deploy-ai-arbiter-test" },
 ]
 
 # RentEscrow invariant suite (test/RentEscrow.invariant.t.sol): the handler only makes valid
