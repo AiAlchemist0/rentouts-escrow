@@ -79,12 +79,12 @@ Then, for a funded lease:
 
 ```bash
 cast send <rentEscrow> "openDispute(uint256)" 1 --account <landlord or tenant> --rpc-url sepolia
-cast send <aiArbiter> "submitEvidence(uint256,string)" 1 "The tenant broke the kitchen window ..." --account <landlord>
-cast send <aiArbiter> "submitEvidence(uint256,string)" 1 "I broke it by accident ..." --account <tenant>
+cast send <aiArbiter> "submitEvidence(uint256,string)" 1 "The tenant broke the kitchen window ..." --account <landlord> --rpc-url sepolia
+cast send <aiArbiter> "submitEvidence(uint256,string)" 1 "I broke it by accident ..." --account <tenant> --rpc-url sepolia
 ./run.sh --lease 1 --propose                 # ruling in seconds; prints the appeal deadline
-cast send <aiArbiter> "appeal(uint256)" 1 --account <tenant or landlord>          # optional, inside the window
-cast send <aiArbiter> "execute(uint256)" 1 --account <anyone>                     # after the window, if not appealed
-cast send <aiArbiter> "resolveByHuman(uint256,uint16)" 1 5000 --account <human>   # any time: direct or override
+cast send <aiArbiter> "appeal(uint256)" 1 --account <tenant or landlord> --rpc-url sepolia          # optional, inside the window
+cast send <aiArbiter> "execute(uint256)" 1 --account <anyone> --rpc-url sepolia                     # after the window, if not appealed
+cast send <aiArbiter> "resolveByHuman(uint256,uint16)" 1 5000 --account <human> --rpc-url sepolia   # any time: direct or override
 ```
 
 ## How it works
