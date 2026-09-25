@@ -103,6 +103,7 @@ Running, timestamped log of the ENS track (owner: Bektur), updated as we go. Tim
 
 ## Open items
 
+- [ ] Core escrow (`feat/core-escrow`): `resolveDispute` counts the tenant's dispute share as deposit returned before unreleased prepaid rent, which inflates `rentouts.depositReturnRate` (review repro: landlord kept the whole deposit, rate showed `29`). The ENS README documents the current rule. If core changes the attribution, drop that caveat from the records table.
 - [ ] Broadcast the issuer role cleanup (Bektur, deployer keystore): `BROADCAST=true ./scripts/ens.sh subnames`. Then confirm that `roles(keccak256("rentouts.leasesCompleted"), issuer)` returns 0.
 
 - [x] Claim `alice.rentouts.eth` → **gate** (22:24).

@@ -29,7 +29,7 @@ overwrite them while they hold issuer status (see the trust model below).
 | `rentouts.leasesCompleted` | `CredentialSync.sync`, from `tenantStats.leasesCompleted` (closed without a dispute) | `3` |
 | `rentouts.disputes` | `CredentialSync.sync`, from `tenantStats.leasesDisputed` | `0` |
 | `rentouts.rentPaid` | `CredentialSync.sync`, from `tenantStats.rentPaid`: USDC (6 decimals) written with 2 decimals, rounded down | `1250.00` |
-| `rentouts.depositReturnRate` | `CredentialSync.sync`: `depositsReturned * 100 / depositsPosted`, whole percent, rounded down, capped at 100. `n/a` until a lease with a deposit has ended. | `100`, `50`, `n/a` |
+| `rentouts.depositReturnRate` | `CredentialSync.sync`: `depositsReturned * 100 / depositsPosted`, whole percent, rounded down, capped at 100. `n/a` until a lease with a deposit has ended. For a lease that ended in a dispute, the escrow counts the tenant's share of everything still escrowed (deposit plus unreleased prepaid rent), capped at the deposit, as returned. So a refund of prepaid rent raises the rate even when the landlord kept the deposit | `100`, `50`, `n/a` |
 | `rentouts.escrow` | `CredentialSync.sync`: CAIP-10 id of the escrow the stats come from | `eip155:11155111:0x…` (lowercase) |
 | `rentouts.onTimeRate`, `rentouts.rating`, `rentouts.verified` | issuer EOA (key-scoped EAC role on the resolver, or `setCredential`): judgments the escrow can't derive | `100`, `5`, `true` |
 | `avatar`, `description`, `url`, `com.twitter`, `com.github` | holder via `setProfileText` | … |
