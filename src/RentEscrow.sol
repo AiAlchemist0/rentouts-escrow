@@ -42,6 +42,10 @@ contract RentEscrow is IRentEscrow, ReentrancyGuard {
 
     mapping(uint256 leaseId => Lease) internal _leases;
     mapping(address tenant => TenantStats) internal _stats;
+    /// @dev Rent periods earned (elapsed, claimed or not) when the lease's dispute was opened. Rent
+    ///      stops accruing then, so resolveDispute can tell a refund of unearned rent apart from
+    ///      the deposit coming back.
+    mapping(uint256 leaseId => uint16 periods) internal _earnedAtDispute;
 
     /// @notice Constructor argument was the zero address (token or arbiter).
     error ZeroAddress();
@@ -220,6 +224,8 @@ contract RentEscrow is IRentEscrow, ReentrancyGuard {
         _requireState(l, leaseId, State.ACTIVE);
         if (msg.sender != l.tenant && msg.sender != l.landlord) revert NotParty(leaseId);
 
+        (uint16 due,) = claimable(leaseId); // read while still ACTIVE
+        _earnedAtDispute[leaseId] = l.periodsClaimed + due;
         l.state = State.DISPUTED;
         _stats[l.tenant].leasesDisputed += 1;
         emit DisputeOpened(leaseId, msg.sender);
@@ -228,6 +234,10 @@ contract RentEscrow is IRentEscrow, ReentrancyGuard {
     /// @inheritdoc IRentEscrow
     /// @dev The tenant's share rounds down; the landlord gets the rest, so the payout is exact.
     ///      Counts toward depositsPosted / depositsReturned, never toward leasesCompleted.
+    ///      depositsReturned: the tenant's payout first refunds rent not yet earned when the dispute
+    ///      was opened, then returns the deposit, then any earned rent. So a ruling that refunds
+    ///      unused rent but keeps the deposit records 0 returned, and one that returns the deposit
+    ///      and leaves earned rent to the landlord records the whole deposit, claimed or not.
     function resolveDispute(uint256 leaseId, uint16 tenantBps) external nonReentrant {
         if (msg.sender != arbiter) revert NotArbiter();
         if (tenantBps > BPS_DENOMINATOR) revert InvalidBps(tenantBps);
@@ -239,14 +249,17 @@ contract RentEscrow is IRentEscrow, ReentrancyGuard {
         uint256 toLandlord = balance - toTenant;
         uint128 deposit = l.deposit;
         address tenant = l.tenant;
+        uint256 unearnedRent = uint256(l.periods - _earnedAtDispute[leaseId]) * l.rentPerPeriod;
+        uint256 depositBack = toTenant > unearnedRent ? toTenant - unearnedRent : 0;
+        if (depositBack > deposit) depositBack = deposit;
 
         l.state = State.CLOSED;
         escrowBalance[leaseId] = 0;
         TenantStats storage s = _stats[tenant];
         s.depositsPosted += deposit;
-        // casting to 'uint128' is safe because it only happens when toTenant < deposit (a uint128)
+        // casting to 'uint128' is safe because depositBack <= deposit, a uint128
         // forge-lint: disable-next-line(unsafe-typecast)
-        s.depositsReturned += toTenant < deposit ? uint128(toTenant) : deposit;
+        s.depositsReturned += uint128(depositBack);
         emit DisputeResolved(leaseId, tenantBps, toTenant, toLandlord);
 
         _pay(tenant, toTenant);

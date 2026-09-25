@@ -652,7 +652,39 @@ contract RentEscrowTest is Test {
         assertEq(s.periodsPaid, 1); // only the claimed period counts as rent paid
         assertEq(s.rentPaid, RENT);
         assertEq(s.depositsPosted, DEPOSIT);
-        assertEq(s.depositsReturned, toTenant); // 250 < 300 deposit
+        // 250 to the tenant: 200 refunds the 2 unearned periods, only 50 is deposit coming back.
+        assertEq(s.depositsReturned, toTenant - 2 * uint256(RENT));
+    }
+
+    function test_ResolveDispute_RefundingUnusedRentIsNotADepositReturn() public {
+        uint256 id = _createAndFund();
+        vm.prank(landlord);
+        escrow.openDispute(id); // at move-in: no rent earned yet
+
+        // The landlord keeps the whole 300 deposit; the tenant only gets its 3 x 100 prepaid rent back.
+        vm.prank(arbiter);
+        escrow.resolveDispute(id, 5_000);
+        assertEq(usdc.balanceOf(tenant), uint256(RENT) * PERIODS);
+        assertEq(usdc.balanceOf(landlord), DEPOSIT);
+
+        IRentEscrow.TenantStats memory s = escrow.tenantStats(tenant);
+        assertEq(s.depositsPosted, DEPOSIT);
+        assertEq(s.depositsReturned, 0); // a forfeited deposit, not a 100% return rate
+    }
+
+    function test_ResolveDispute_DepositReturnedWhileEarnedRentUnclaimed() public {
+        uint256 id = _createAndFund();
+        vm.warp(escrow.endTime(id)); // all rent earned, none of it claimed
+        vm.prank(landlord);
+        escrow.openDispute(id); // disputes the deposit in the grace window
+        vm.warp(block.timestamp + 30 days); // a slow arbiter changes nothing: earned rent is fixed at dispute time
+
+        // The landlord keeps the earned rent, the tenant gets the whole deposit back.
+        vm.prank(arbiter);
+        escrow.resolveDispute(id, 5_000);
+        assertEq(usdc.balanceOf(tenant), DEPOSIT);
+        assertEq(usdc.balanceOf(landlord), uint256(RENT) * PERIODS);
+        assertEq(escrow.tenantStats(tenant).depositsReturned, DEPOSIT);
     }
 
     function test_ResolveDispute_FullBpsAllToTenantCapsDepositsReturned() public {
@@ -670,13 +702,20 @@ contract RentEscrowTest is Test {
         assertEq(s.depositsReturned, DEPOSIT); // min(toTenant, deposit)
     }
 
-    function testFuzz_ResolveDispute_PaysOutExactlyRemainingEscrow(uint16 bps, uint256 dt) public {
+    function testFuzz_ResolveDispute_PaysOutExactlyRemainingEscrow(
+        uint16 bps,
+        uint256 dt,
+        bool claimFirst,
+        uint256 ruleDelay
+    ) public {
         bps = uint16(bound(bps, 0, 10_000));
         uint256 id = _createAndFund();
-        vm.warp(block.timestamp + bound(dt, 0, 5 * uint256(PERIOD)));
+        dt = bound(dt, 0, 5 * uint256(PERIOD));
+        vm.warp(block.timestamp + dt);
         (uint16 n,) = escrow.claimable(id);
-        if (n > 0) escrow.claimRent(id);
+        if (claimFirst && n > 0) escrow.claimRent(id);
         _dispute(id);
+        vm.warp(block.timestamp + bound(ruleDelay, 0, 10 * uint256(PERIOD)));
 
         uint256 remaining = escrow.escrowBalance(id);
         uint256 landlordBefore = usdc.balanceOf(landlord);
@@ -689,6 +728,13 @@ contract RentEscrowTest is Test {
         assertEq(toTenant, remaining * bps / 10_000);
         assertEq(usdc.balanceOf(address(escrow)), 0);
         assertEq(escrow.escrowBalance(id), 0);
+
+        // depositsReturned: the payout refunds rent unearned at dispute time first, then the deposit.
+        uint256 earned = dt / PERIOD > PERIODS ? PERIODS : dt / PERIOD;
+        uint256 unearned = uint256(RENT) * (PERIODS - earned);
+        uint256 depositBack = toTenant > unearned ? toTenant - unearned : 0;
+        if (depositBack > DEPOSIT) depositBack = DEPOSIT;
+        assertEq(escrow.tenantStats(tenant).depositsReturned, depositBack);
     }
 
     // ------------------------------------------------------------------ multi-lease accounting
@@ -708,7 +754,7 @@ contract RentEscrowTest is Test {
         vm.prank(landlord);
         escrow.closeLease(a);
 
-        uint256 bToTenant = (TOTAL - RENT) / 2;
+        uint256 bToTenant = (TOTAL - RENT) / 2; // 250: 200 unearned rent refunded + 50 of the deposit
         IRentEscrow.TenantStats memory s = escrow.tenantStats(tenant);
         assertEq(s.leasesFunded, 2);
         assertEq(s.leasesCompleted, 1);
@@ -716,7 +762,7 @@ contract RentEscrowTest is Test {
         assertEq(s.periodsPaid, PERIODS + 1);
         assertEq(s.rentPaid, uint256(RENT) * (PERIODS + 1));
         assertEq(s.depositsPosted, 2 * uint256(DEPOSIT));
-        assertEq(s.depositsReturned, DEPOSIT + bToTenant);
+        assertEq(s.depositsReturned, DEPOSIT + (bToTenant - 2 * uint256(RENT)));
         assertEq(usdc.balanceOf(address(escrow)), 0);
     }
 
