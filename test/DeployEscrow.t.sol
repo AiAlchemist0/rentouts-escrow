@@ -259,8 +259,11 @@ contract DeployEscrowTest is Test {
         assertEq(vm.parseJsonAddress(json, ".sepolia.rentEscrow"), makeAddr("escrow2"));
         assertEq(vm.parseJsonAddress(json, ".sepolia.leaseShare1155"), a[4]);
 
-        string[] memory top = vm.parseJsonKeys(json, "$");
-        assertEq(top.length, 2, "top-level entries other than baseSepolia + sepolia");
+        // Only the "sepolia" entry is added (or replaced): other entries, e.g. DeployAIArbiter's
+        // "sepoliaAIArbiter", are kept as they are.
+        uint256 before = vm.parseJsonKeys(original, "$").length;
+        uint256 added = vm.keyExists(original, ".sepolia") ? 0 : 1;
+        assertEq(vm.parseJsonKeys(json, "$").length, before + added, "record added more than the sepolia entry");
         vm.removeFile(UPSERT_FILE);
     }
 
