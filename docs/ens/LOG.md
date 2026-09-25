@@ -22,7 +22,7 @@ Running, timestamped log of the ENS track (owner: Bektur), updated as we go. Tim
 | Parent records | `addr` = `0x7ed696c879a1a7FD2eD3b49d9982E634a8647eb1` (RentOuts' published address), `url` = `https://rentouts.co`, `email` = `partners@rentouts.co`, `com.twitter` = `RentOuts`, `description` |
 | Machine-readable | [`ens/deployments/sepolia.json`](../../ens/deployments/sepolia.json) |
 | Gate | ✅ **passed Fri 22:24** (`alice.rentouts.eth` resolves `addr` + `rentouts.credential`) |
-| Next | credential relayer, `app/src/lib/ens.ts`, ENS writeup |
+| Next | `CredentialSync` (on-chain, permissionless), `app/`, ENS writeup — see 22:40 entry |
 
 ---
 
@@ -31,7 +31,7 @@ Running, timestamped log of the ENS track (owner: Bektur), updated as we go. Tim
 **21:29 — Local session takes over from the cloud session.** The cloud VM had no Sepolia RPC and couldn't push (GitHub 403), so its handoff arrived as a `.patch`.
 - Applied it on `ens-integration` with `git am` and pushed (`f9b6036`): `docs/ens/HANDOFF.md` + `docs/ens/research/ensv2-docs-research.md`.
 
-**21:31 — Tooling.** Installed Foundry 1.8.3 via the official `foundryup`; added `~/.foundry/bin` to `~/.zshrc` (the installer hadn't). Homebrew can't install the Supabase CLI (Xcode license not accepted → needs sudo), so the CLI is used via `npx -y supabase@2.117.0` — see `hackathon-brief/09-supabase-cli.md` (outside the repo).
+**21:31 — Tooling.** Installed Foundry 1.8.3 via the official `foundryup`; added `~/.foundry/bin` to `~/.zshrc` (the installer hadn't).
 
 **21:35 — Sanity checks on live Sepolia (read-only), HANDOFF §4 step 0.** All passed:
 - `rentouts` available; price 8.000021 ENS-MockUSDC for 1 year; `MIN_COMMITMENT_AGE` 60 s, max 86 400 s.
@@ -87,12 +87,19 @@ Running, timestamped log of the ENS track (owner: Bektur), updated as we go. Tim
 - `labelOf`/`nameOf` correct; registry owner = alice; expiry = `2^64-1` (never)
 - Soulbound on the real chain: `unsafeTransfer` from alice → `TransferDisallowed`
 
+**22:40 — Team decisions (Bektur).**
+- **Build everything**, but the public repo gets only what judges need; internal research/strategy/runbooks live in the private product repo.
+- **One chain: everything on Ethereum Sepolia** (escrow + Dean's `LeaseShare1155` + ENS). ENSv2 only exists there, and one chain lets credentials be **derived on-chain** from escrow state by a permissionless `CredentialSync.sync(tenant)` instead of a trusted off-chain relayer. There's no Base prize, so Base added nothing for judging.
+- **Escrow token: Circle's USDC on Sepolia** (`0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`, 6 decimals; ETHGlobal and Circle faucets), so "USDC escrow" is literally true. Demo amounts are small. A mock token stays a deploy-time fallback.
+- World gate stays on hold.
+- The core escrow (`RentEscrow`) had no owner and is the demo's spine: built now on `feat/core-escrow`, branched from Dean's `feat/curvegrid-rwa` so it can mint `LeaseShare1155` shares.
+
 ---
 
 ## Open items
 
 - [x] Claim `alice.rentouts.eth` → **gate** (22:24).
-- [ ] Credential relayer (`ens/scripts/sync-credentials.ts`): issuer writes `rentouts.*` from escrow events. Needs the escrow owner to `index` `tenant`/`landlord` in events.
+- [ ] `CredentialSync` (replaces the off-chain relayer): permissionless `sync(tenant)` reads `RentEscrow.tenantStats` and writes `rentouts.*` via `RentoutsSubnames` (made an issuer).
 - [ ] `app/src/lib/ens.ts`: claim step (`simulateContract` for availability, `labelOf(account)` on connect, `normalize()`), profile card (show `rentouts.*` only when `status == active` and `addr` matches).
 - [ ] ENS section of README + `FEEDBACK.md`; paste the exact Tokyo ENS prize text into `docs/ens/PRIZE.md`.
 - [ ] Ask ENS mentors: another Sepolia redeploy before Sunday? Does app.ens.dev show UserRegistry subnames + custom keys?
