@@ -21,9 +21,6 @@ import {
 } from '../lib/aiJudge'
 import { formatCountdown, formatToken, txUrl } from '../lib/format'
 
-/** The model behind the judge service (judge/ in the repo). */
-export const JUDGE_MODEL = 'GLM 5.3'
-
 export const AI_ONLY_PROPOSES =
   'The AI judge only proposes a split: either side can appeal inside the challenge window, and the human arbiter can always override it before it’s executed.'
 
@@ -297,7 +294,7 @@ export function AiJudgePanel({ lease, account, info, now, nameOf }: Props) {
       {ruling && (hadProposal || view.final) ? (
         <div className="proposal">
           <p className="proposal-kicker">
-            {humanRuled ? 'Final split, by the human arbiter' : view.phase === 'executed' ? 'Executed split' : `Proposed by the ${JUDGE_MODEL} judge`}
+            {humanRuled ? 'Final split, by the human arbiter' : view.phase === 'executed' ? 'Executed split' : 'Proposed by the AI judge'}
           </p>
           <p className="proposal-split">
             <strong>{formatBps(shownBps)}</strong> to the tenant · {formatBps(BPS - shownBps)} to the landlord
@@ -323,7 +320,8 @@ export function AiJudgePanel({ lease, account, info, now, nameOf }: Props) {
               <div>
                 <dt>Proposed by</dt>
                 <dd>
-                  {JUDGE_MODEL} judge{agent ? <> · <AddressLink address={agent} /></> : null}
+                  {/* Not the model: the Proposed event doesn't record it (the ruling hash commits to it). */}
+                  AI judge key{agent ? <> · <AddressLink address={agent} /></> : null}
                 </dd>
               </div>
               <div>

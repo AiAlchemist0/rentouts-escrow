@@ -77,8 +77,9 @@ The escrow's arbiter is the `AIArbiter` contract (`src/AIArbiter.sol`, with the 
   `Evidence` events, each with its Etherscan link.
 - **The proposal.** Shows the tenant's share as a percentage, a split bar, and what each side would receive
   from the current escrow. Also shown: the judge's confidence, its one-line summary (from the `Proposed` event),
-  the `rulingHash`, "proposed by the GLM 5.3 judge" with the judge key, and a live countdown to the end of the
-  challenge window.
+  the `rulingHash`, "proposed by the AI judge" with the judge key, and a live countdown to the end of the
+  challenge window. The page doesn't name the model: the `Proposed` event doesn't record it, but the
+  `rulingHash` commits to it (`npm run judge -- --verify`).
 - **Appeal**: for the tenant or landlord, inside the window. **Execute**: for anyone, once the window is over
   and nobody appealed. Before that the button shows a countdown.
 - **Resolve as human arbiter**: only for the wallet that is `AIArbiter.human()`, with a percentage slider

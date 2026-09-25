@@ -9,7 +9,6 @@ import { useTxLog } from './txLog'
 import { CreateLeasePanel } from './panels/CreateLeasePanel'
 import { FundPanel } from './panels/FundPanel'
 import { IdentityPanel } from './panels/IdentityPanel'
-import { JUDGE_MODEL } from './panels/AiJudgePanel'
 import { LeasesPanel } from './panels/LeasesPanel'
 import { SharesPanel } from './panels/SharesPanel'
 
@@ -86,7 +85,7 @@ function Footer() {
           />
           {ai && !arbiterIsAi ? <ContractRow name="AIArbiter" address={ai.address} note="(AI judge contract with a human arbiter)" /> : null}
           {ai ? <ContractRow name="Human arbiter" address={ai.human} note="(can always override the AI)" /> : null}
-          {ai ? <ContractRow name="AI judge key" address={ai.agent} note={ai.agent ? `(${JUDGE_MODEL}; can only propose)` : '(AI proposals off)'} /> : null}
+          {ai ? <ContractRow name="AI judge key" address={ai.agent} note={ai.agent ? '(can only propose)' : '(AI proposals off)'} /> : null}
           {humanGate ? <ContractRow name="HumanGate" address={humanGate} note="(who may fund a lease; World ID coming soon)" /> : null}
           <ContractRow name="LeaseShare1155" address={leaseShare} />
           <ContractRow name="CredentialSync" address={credentialSync} />
