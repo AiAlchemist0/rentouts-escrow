@@ -5,9 +5,11 @@ pragma solidity ^0.8.24;
 /// @notice Non-custodial rental escrow (Ethereum Sepolia, Circle USDC). A smart contract, never
 ///         RentOuts, holds the tenant's deposit and prepaid rent; it releases rent to the landlord
 ///         as periods elapse and returns the deposit at the end. Disputes go to a fixed arbiter who
-///         can only split the remaining escrow between tenant and landlord.
+///         can only split the remaining escrow between tenant and landlord. An optional human gate
+///         (World ID seam, see IHumanGate / HumanGate) decides who may fund a new lease.
 ///
-///         Lifecycle:  createLease (landlord) -> fundLease (tenant, prepays deposit + all rent)
+///         Lifecycle:  createLease (landlord) -> fundLease (tenant, prepays deposit + all rent;
+///                     must pass the human gate if one is set)
 ///                     -> claimRent (as periods elapse) -> closeLease (after term: rest of rent to
 ///                     landlord, deposit to tenant)
 ///                     ACTIVE -> openDispute (either party) -> resolveDispute (arbiter, tenantBps)
@@ -76,6 +78,7 @@ interface IRentEscrow {
     error NothingToClaim(uint256 leaseId);
     error TermNotOver(uint256 leaseId);
     error InvalidBps(uint16 bps);
+    error NotVerifiedHuman(address account);
 
     // ------------------------------------------------------------------ config (immutable)
 
@@ -85,6 +88,10 @@ interface IRentEscrow {
     ///         SHARES_PER_LEASE shares of tokenId == leaseId to the landlord; the landlord must be
     ///         allowlisted there (compliance-aware listing).
     function leaseShare() external view returns (address);
+    /// @notice IHumanGate consulted by fundLease, or address(0) if funding is not gated at all.
+    ///         Fixed at deployment; the gate itself (HumanGate) can switch its verifier later, e.g.
+    ///         to World ID, without redeploying the escrow. It only ever gates funding new leases.
+    function humanGate() external view returns (address);
     function SHARES_PER_LEASE() external view returns (uint256);
     function MIN_PERIOD() external view returns (uint32);
 
@@ -110,6 +117,7 @@ interface IRentEscrow {
     function cancelLease(uint256 leaseId) external;
 
     /// @notice Tenant prepays deposit + rentPerPeriod * periods (needs token approval). CREATED -> ACTIVE.
+    ///         If humanGate is set, reverts NotVerifiedHuman unless humanGate.isVerified(tenant).
     function fundLease(uint256 leaseId) external;
 
     /// @notice Releases every elapsed, unclaimed rent period to the landlord. Callable by anyone
