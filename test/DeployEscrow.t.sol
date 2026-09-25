@@ -61,6 +61,40 @@ contract DeployEscrowTest is Test {
         script.deploy(deployer, address(usdc), arbiter, address(0));
     }
 
+    function test_Deploy_ExistingShares_UnusedOneIsWired() public {
+        LeaseShare1155 existing = new LeaseShare1155(deployer, "");
+        (RentEscrow escrow, LeaseShare1155 shares) = script.deploy(deployer, address(usdc), arbiter, address(existing));
+        assertEq(address(shares), address(existing));
+        assertEq(existing.minter(), address(escrow));
+        vm.prank(deployer);
+        assertEq(escrow.createLease(tenant, 300000, 100000, 60, 3), 1);
+    }
+
+    function test_Deploy_ExistingShares_RevertsIfAlreadyWiredToAnEscrow() public {
+        // First deploy: escrow e1 lists lease 1 (tokenId 1).
+        (RentEscrow e1, LeaseShare1155 shares) = script.deploy(deployer, address(usdc), arbiter, address(0));
+        vm.prank(deployer);
+        e1.createLease(tenant, 300000, 100000, 60, 3);
+
+        // Redeploying the escrow on the same share contract would mint a second lease 1 under
+        // tokenId 1 and make e1 unable to list: refused.
+        vm.expectRevert(bytes("DeployEscrow: LEASE_SHARE already wired to an escrow"));
+        script.deploy(deployer, address(usdc), arbiter, address(shares));
+
+        assertEq(shares.minter(), address(e1));
+        assertEq(shares.totalSupply(1), 100);
+        vm.prank(deployer);
+        assertEq(e1.createLease(tenant, 300000, 100000, 60, 3), 2); // e1 still lists
+    }
+
+    function test_Deploy_ExistingShares_RevertsIfTokenIdOneAlreadyMinted() public {
+        LeaseShare1155 existing = new LeaseShare1155(deployer, "");
+        vm.prank(deployer);
+        existing.mintShare(1, deployer, 1); // the owner can mint without an escrow
+        vm.expectRevert(bytes("DeployEscrow: LEASE_SHARE already has shares of tokenId 1"));
+        script.deploy(deployer, address(usdc), arbiter, address(existing));
+    }
+
     function test_Deploy_ArbiterCannotBeAPartyOnTheDeployedEscrow() public {
         (RentEscrow escrow,) = script.deploy(deployer, address(usdc), arbiter, address(0));
         vm.prank(deployer);

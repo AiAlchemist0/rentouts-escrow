@@ -8,7 +8,8 @@ import {RentEscrow} from "../src/RentEscrow.sol";
 import {LeaseShare1155} from "../src/LeaseShare1155.sol";
 
 /// @notice Deploys RentEscrow to Ethereum Sepolia, wired to a LeaseShare1155 (a new one owned by
-///         the deployer unless LEASE_SHARE points at an existing one the deployer owns).
+///         the deployer unless LEASE_SHARE points at an unused one the deployer owns). One
+///         LeaseShare1155 per RentEscrow: a share contract already wired to an escrow is refused.
 ///         Signs with a Foundry keystore account (--account); never takes a raw private key.
 ///
 ///   Env: SEPOLIA_RPC_URL, ESCROW_ARBITER (required: a separate EOA, never the deployer or a lease
@@ -65,13 +66,19 @@ contract DeployEscrow is Script {
         require(arbiter != deployer, "DeployEscrow: ESCROW_ARBITER must not be the deployer (the demo landlord)");
         if (existingShares != address(0)) {
             require(existingShares.code.length > 0, "DeployEscrow: LEASE_SHARE has no code on this chain");
+            LeaseShare1155 existing = LeaseShare1155(existingShares);
             // The escrow can only mint lease shares if the deployer can make it the minter.
-            require(LeaseShare1155(existingShares).owner() == deployer, "DeployEscrow: deployer must own LEASE_SHARE");
+            require(existing.owner() == deployer, "DeployEscrow: deployer must own LEASE_SHARE");
+            // One LeaseShare1155 per RentEscrow: lease ids restart at 1 in every escrow and
+            // tokenId == leaseId, so re-wiring a share contract would put two escrows' leases under
+            // the same tokenId (and stop the old escrow from listing).
+            require(existing.minter() == address(0), "DeployEscrow: LEASE_SHARE already wired to an escrow");
+            require(existing.totalSupply(1) == 0, "DeployEscrow: LEASE_SHARE already has shares of tokenId 1");
         }
 
         vm.startBroadcast(deployer);
         shares = existingShares == address(0)
-            ? new LeaseShare1155(deployer, SHARE_URI) // constructor allowlists the owner
+            ? new LeaseShare1155(deployer, SHARE_URI)  // constructor allowlists the owner
             : LeaseShare1155(existingShares);
         escrow = new RentEscrow(IERC20(token), arbiter, address(shares));
         shares.setMinter(address(escrow));

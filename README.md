@@ -15,7 +15,7 @@
 | `src/interfaces/IRentEscrow.sol` | Pinned escrow interface (lifecycle, events, errors, invariants) shared with the app and the ENS credential sync |
 | `test/RentEscrow.t.sol`, `test/RentEscrow.invariant.t.sol` | 45 unit/fuzz tests + a handler-based invariant suite (INV-1..INV-4) |
 | `script/DeployEscrow.s.sol` | Ethereum Sepolia deploy of RentEscrow + LeaseShare1155 (keystore signing) → `deployments/sepolia.json` |
-| `test/DeployEscrow.t.sol` | 4 tests of the deploy script's config checks and wiring |
+| `test/DeployEscrow.t.sol` | 7 tests of the deploy script's config checks and wiring |
 | `deployments.json` | Live contract addresses |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Design + diagrams for the deployed contract |
 
@@ -60,7 +60,7 @@ A handler runs random create / fund / warp / claim / close / dispute / resolve /
 
 ```bash
 forge test --match-path 'test/RentEscrow*' -vv   # 45 unit/fuzz tests + 4 invariants, ~2 s
-forge test --match-path test/DeployEscrow.t.sol   # 4 deploy-script tests
+forge test --match-path test/DeployEscrow.t.sol   # 7 deploy-script tests
 ```
 
 Unit tests cover every function and exact custom-error revert, partial / complete claims with `vm.warp`, the close grace rule, cancel, 0 / 5000 / 10000 bps splits (plus a fuzzed split), share minting and the non-allowlisted-landlord revert, re-entry through the ERC-1155 receive hook, the arbiter never being a party, and tenant-stats accounting (including how a dispute payout splits into refunded rent and returned deposit).
@@ -72,7 +72,7 @@ cast wallet import rentouts-deployer --interactive   # once: encrypted Foundry k
 export SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
 export ESCROW_ARBITER=0x...                          # required: a separate EOA, never the deployer or a demo landlord/tenant
 # optional: ESCROW_TOKEN (default: Circle test USDC 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238),
-#           LEASE_SHARE (an existing LeaseShare1155 the deployer owns; default: deploy a new one)
+#           LEASE_SHARE (an unused LeaseShare1155 the deployer owns; default: deploy a new one)
 
 # dry run: simulation only, records nothing
 forge script script/DeployEscrow.s.sol --rpc-url sepolia --sender <deployer>
@@ -82,7 +82,7 @@ BROADCAST=true forge script script/DeployEscrow.s.sol --rpc-url sepolia \
   --account rentouts-deployer --sender <deployer> --broadcast
 ```
 
-The script makes the escrow the `LeaseShare1155` minter and allowlists the deployer as the demo landlord, so it refuses an `ESCROW_ARBITER` equal to the deployer (an arbiter that is also a party could open a dispute and rule the whole escrow to itself; `RentEscrow` rejects such leases anyway). Every other landlord has to be allowlisted by the share owner before they can list: `cast send <leaseShare1155> "setAllowlist(address,bool)" <landlord> true --account rentouts-deployer --rpc-url sepolia`. The dry run simulates at ~3.9M gas (≈0.0085 ETH at ~1 gwei), which the ETHGlobal faucet's 0.05 Sepolia ETH covers.
+The script makes the escrow the `LeaseShare1155` minter and allowlists the deployer as the demo landlord, so it refuses an `ESCROW_ARBITER` equal to the deployer (an arbiter that is also a party could open a dispute and rule the whole escrow to itself; `RentEscrow` rejects such leases anyway). It is **one `LeaseShare1155` per `RentEscrow`**: lease ids restart at 1 in every escrow and `tokenId == leaseId`, so the script refuses a `LEASE_SHARE` that is already wired to an escrow (or already holds shares of tokenId 1). To redeploy the escrow, let it deploy a new share contract. Every other landlord has to be allowlisted by the share owner before they can list: `cast send <leaseShare1155> "setAllowlist(address,bool)" <landlord> true --account rentouts-deployer --rpc-url sepolia`. The dry run simulates at ~3.9M gas (≈0.0085 ETH at ~1 gwei), which the ETHGlobal faucet's 0.05 Sepolia ETH covers.
 
 **Demo amounts:** the ETHGlobal faucet hands out 1 USDC on Sepolia per claim, so keep demo leases small. For example, `createLease(tenant, 300000, 100000, 60, 3)` escrows a 0.30 USDC deposit + 3 × 0.10 USDC rent at 60-second periods (0.60 USDC total).
 
