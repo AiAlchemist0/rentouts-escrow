@@ -6,3 +6,7 @@ deployments/.commit-*.json
 node_modules/
 foundry-pp/
 test/tmp_*.t.sol
+# Local anvil-fork rehearsals (scripts/ens.sh with RPC_OVERRIDE) and fork-test state files
+broadcast-local/
+deployments/local*.json
+deployments/test-*.json
