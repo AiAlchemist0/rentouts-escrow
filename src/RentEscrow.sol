@@ -252,11 +252,17 @@ contract RentEscrow is IRentEscrow, ReentrancyGuard {
 
     /// @inheritdoc IRentEscrow
     /// @dev The tenant's share rounds down; the landlord gets the rest, so the payout is exact.
-    ///      Counts toward depositsPosted / depositsReturned, never toward leasesCompleted.
+    ///      Counts toward depositsPosted / depositsReturned and rentPaid / periodsPaid, never toward
+    ///      leasesCompleted.
     ///      depositsReturned: the tenant's payout first refunds rent not yet earned when the dispute
     ///      was opened, then returns the deposit, then any earned rent. So a ruling that refunds
     ///      unused rent but keeps the deposit records 0 returned, and one that returns the deposit
     ///      and leaves earned rent to the landlord records the whole deposit, claimed or not.
+    ///      rentPaid / periodsPaid: the landlord's payout is read from the other end, so it is
+    ///      earned-but-unclaimed rent first. That part (and the whole periods it covers) counts as
+    ///      rent paid, as if it had been claimed before the dispute. See _recordRuling.
+    ///      Earned rent that was not claimed before the dispute is still part of the split, so a
+    ///      ruling can move it to the tenant (arbiter trust model; README "Honest limits").
     function resolveDispute(uint256 leaseId, uint16 tenantBps) external nonReentrant {
         if (msg.sender != arbiter) revert NotArbiter();
         if (tenantBps > BPS_DENOMINATOR) revert InvalidBps(tenantBps);
@@ -266,22 +272,13 @@ contract RentEscrow is IRentEscrow, ReentrancyGuard {
         uint256 balance = escrowBalance[leaseId];
         uint256 toTenant = balance * tenantBps / BPS_DENOMINATOR;
         uint256 toLandlord = balance - toTenant;
-        uint128 deposit = l.deposit;
-        address tenant = l.tenant;
-        uint256 unearnedRent = uint256(l.periods - _earnedAtDispute[leaseId]) * l.rentPerPeriod;
-        uint256 depositBack = toTenant > unearnedRent ? toTenant - unearnedRent : 0;
-        if (depositBack > deposit) depositBack = deposit;
 
         l.state = State.CLOSED;
         escrowBalance[leaseId] = 0;
-        TenantStats storage s = _stats[tenant];
-        s.depositsPosted += deposit;
-        // casting to 'uint128' is safe because depositBack <= deposit, a uint128
-        // forge-lint: disable-next-line(unsafe-typecast)
-        s.depositsReturned += uint128(depositBack);
+        _recordRuling(l, _earnedAtDispute[leaseId], toTenant, toLandlord);
         emit DisputeResolved(leaseId, tenantBps, toTenant, toLandlord);
 
-        _pay(tenant, toTenant);
+        _pay(l.tenant, toTenant);
         _pay(l.landlord, toLandlord);
     }
 
@@ -289,6 +286,34 @@ contract RentEscrow is IRentEscrow, ReentrancyGuard {
 
     function _requireState(Lease storage l, uint256 leaseId, State expected) internal view {
         if (l.state != expected) revert InvalidState(leaseId, l.state);
+    }
+
+    /// @dev Books a dispute ruling into the tenant's stats. The escrow pot is, in order, rent not
+    ///      yet earned when the dispute opened, the deposit, then earned-but-unclaimed rent. The
+    ///      tenant's payout is read from the front (unearned refund, then deposit back), the
+    ///      landlord's from the back (earned rent first). `earned` is _earnedAtDispute (>= periodsClaimed).
+    function _recordRuling(Lease storage l, uint16 earned, uint256 toTenant, uint256 toLandlord) internal {
+        uint128 deposit = l.deposit;
+        uint256 unearnedRent = uint256(l.periods - earned) * l.rentPerPeriod;
+        uint256 depositBack = toTenant > unearnedRent ? toTenant - unearnedRent : 0;
+        if (depositBack > deposit) depositBack = deposit;
+
+        uint16 earnedUnclaimed = earned - l.periodsClaimed;
+        uint256 rentReleased = uint256(earnedUnclaimed) * l.rentPerPeriod;
+        if (rentReleased > toLandlord) rentReleased = toLandlord;
+        // casting to 'uint16' is safe because rentReleased / rentPerPeriod <= earnedUnclaimed, a uint16
+        // forge-lint: disable-next-line(unsafe-typecast)
+        uint16 periodsReleased = l.rentPerPeriod == 0 ? earnedUnclaimed : uint16(rentReleased / l.rentPerPeriod);
+
+        TenantStats storage s = _stats[l.tenant];
+        s.periodsPaid += periodsReleased;
+        // casting to 'uint128' is safe because rentReleased <= rent * periods <= type(uint128).max
+        // forge-lint: disable-next-line(unsafe-typecast)
+        s.rentPaid += uint128(rentReleased);
+        s.depositsPosted += deposit;
+        // casting to 'uint128' is safe because depositBack <= deposit, a uint128
+        // forge-lint: disable-next-line(unsafe-typecast)
+        s.depositsReturned += uint128(depositBack);
     }
 
     function _endTime(Lease storage l) internal view returns (uint64) {

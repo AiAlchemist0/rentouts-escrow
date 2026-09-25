@@ -14,7 +14,7 @@
 | `src/RentEscrow.sol` | **Rental escrow** — holds the tenant's USDC deposit + prepaid rent, releases rent per period, returns the deposit; arbiter-split disputes |
 | `src/interfaces/IRentEscrow.sol` | Pinned escrow interface (lifecycle, events, errors, invariants) shared with the app and the ENS credential sync |
 | `src/HumanGate.sol`, `src/interfaces/IHumanGate.sol` | **Human gate** — the seam where World ID plugs in later: decides who may fund a new lease, never touches funds |
-| `test/RentEscrow.t.sol`, `test/RentEscrow.invariant.t.sol` | 45 unit/fuzz tests + a handler-based invariant suite (INV-1..INV-4) |
+| `test/RentEscrow.t.sol`, `test/RentEscrow.invariant.t.sol` | 47 unit/fuzz tests + a handler-based invariant suite (INV-1..INV-4) |
 | `test/HumanGate.t.sol` | 16 tests of the human gate: off, open, refusing, verifier swapped later on the same escrow, owner-only |
 | `script/DeployEscrow.s.sol` | Ethereum Sepolia deploy of RentEscrow + LeaseShare1155 + HumanGate (keystore signing) → `"sepolia"` entry of `deployments.json` |
 | `test/DeployEscrow.t.sol` | 15 tests of the deploy script's config checks, wiring and deployment record |
@@ -45,7 +45,7 @@ _ENS identity (`RentoutsSubnames` on ENSv2, Ethereum Sepolia) lives on the `ens-
 
 Periods can be as short as `MIN_PERIOD = 60` seconds, so a whole lease plays out live in a demo. `claimable(id)` and `endTime(id)` drive the UI; `tenantStats(tenant)` (leases funded / completed / disputed, periods and rent paid, deposits posted / returned) is the on-chain track record that RentOuts syncs into the tenant's `rentouts.*` ENS records.
 
-**Deposit accounting in a dispute.** The arbiter splits one pot (deposit + rent not yet released), so `depositsReturned` reads the tenant's payout in a fixed order: first a refund of rent not yet earned when the dispute was opened, then the deposit, then earned rent. Only the middle part counts as deposit returned (capped at the deposit). A ruling that gives the tenant back its unused rent but lets the landlord keep the deposit records 0 returned; one that returns the deposit and leaves earned rent to the landlord records the full deposit, whether or not that rent had been claimed. Rent stops accruing when the dispute opens, so a slow ruling changes nothing.
+**Deposit accounting in a dispute.** The arbiter splits one pot (deposit + rent not yet released), so `depositsReturned` reads the tenant's payout in a fixed order: first a refund of rent not yet earned when the dispute was opened, then the deposit, then earned rent. Only the middle part counts as deposit returned (capped at the deposit). A ruling that gives the tenant back its unused rent but lets the landlord keep the deposit records 0 returned; one that returns the deposit and leaves earned rent to the landlord records the full deposit, whether or not that rent had been claimed. `rentPaid` / `periodsPaid` read the landlord's payout from the other end: earned-but-unclaimed rent comes first, and whatever of it the landlord receives counts as rent paid (whole periods as periods paid), as if it had been claimed before the dispute. Rent stops accruing when the dispute opens, so a slow ruling changes nothing.
 
 ### Human gate: where World ID plugs in
 
@@ -70,10 +70,10 @@ A handler runs random create / fund / warp / claim / close / dispute / resolve /
 ### Test
 
 ```bash
-forge test --match-path 'test/RentEscrow*' -vv   # 45 unit/fuzz tests + 4 invariants, ~2 s
+forge test --match-path 'test/RentEscrow*' -vv   # 47 unit/fuzz tests + 4 invariants, ~2 s
 forge test --match-path test/HumanGate.t.sol      # 16 human-gate tests
 forge test --match-path test/DeployEscrow.t.sol   # 15 deploy-script tests
-forge test                                        # everything, incl. the 12 LeaseShare1155 tests (89 total)
+forge test                                        # everything, incl. the 12 LeaseShare1155 tests (91 total)
 ```
 
 Unit tests cover every function and exact custom-error revert, partial / complete claims with `vm.warp`, the close grace rule, cancel, 0 / 5000 / 10000 bps splits (plus a fuzzed split), share minting and the non-allowlisted-landlord revert, re-entry through the ERC-1155 receive hook, the arbiter never being a party, and tenant-stats accounting (including how a dispute payout splits into refunded rent and returned deposit).
@@ -114,6 +114,7 @@ Plugging World ID in later is one call from the gate owner, with no escrow redep
 - Testnet only: Ethereum Sepolia with **Circle's test USDC**. Hackathon code, not audited.
 - The arbiter is a **single EOA** for the hackathon (a Safe multisig in production; the contract accepts either). It can never be a lease's landlord or tenant and never send funds outside the lease's two parties, but it decides the split, and a disputed lease stays frozen until it rules.
 - World ID is **not wired in yet**: the deployed `HumanGate` is open (verifier `0`) until a verifier is set. Its owner is the deployer EOA, who can then refuse funding of new leases (never touch existing ones).
+- Earned rent that nobody has claimed when a dispute opens (by either party) is part of the arbiter's pot: it is frozen until the ruling, and a ruling can move part of it to the tenant (for example an arbiter that rules in coarse steps, such as an AI judge's 25% steps). `claimRent` is open to anyone, so a landlord or keeper should claim as periods elapse. `tenantStats` counts only the rent that actually reaches the landlord.
 - Lease shares minted at `createLease` stay with the landlord if the lease is cancelled (`LeaseShare1155` has no burn).
 - The token must be a plain ERC-20 (no fee-on-transfer or rebasing), which USDC is. With shares enabled, a contract landlord must implement `onERC1155Received`.
 

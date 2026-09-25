@@ -627,6 +627,8 @@ contract RentEscrowTest is Test {
         IRentEscrow.TenantStats memory s = escrow.tenantStats(tenant);
         assertEq(s.leasesCompleted, 0);
         assertEq(s.leasesDisputed, 1);
+        assertEq(s.periodsPaid, 1); // the one earned period reached the landlord through the ruling
+        assertEq(s.rentPaid, RENT);
         assertEq(s.depositsPosted, DEPOSIT);
         assertEq(s.depositsReturned, 0);
     }
@@ -686,7 +688,57 @@ contract RentEscrowTest is Test {
         escrow.resolveDispute(id, 5_000);
         assertEq(usdc.balanceOf(tenant), DEPOSIT);
         assertEq(usdc.balanceOf(landlord), uint256(RENT) * PERIODS);
-        assertEq(escrow.tenantStats(tenant).depositsReturned, DEPOSIT);
+        IRentEscrow.TenantStats memory s = escrow.tenantStats(tenant);
+        assertEq(s.depositsReturned, DEPOSIT);
+        // The landlord got all 3 periods of rent via the ruling: the record says so, as if claimed.
+        assertEq(s.periodsPaid, PERIODS);
+        assertEq(s.rentPaid, uint256(RENT) * PERIODS);
+    }
+
+    function test_ResolveDispute_CountsOnlyTheEarnedRentTheLandlordGets() public {
+        uint256 id = _createAndFund();
+        vm.warp(block.timestamp + 2 * uint256(PERIOD)); // pot: 100 unearned, 300 deposit, 200 earned
+        _dispute(id);
+
+        // 7500 bps (an AI-judge step): tenant 450 = 100 refund + 300 deposit + 50 of the earned rent;
+        // landlord 150 = 150 of the 200 earned rent. One whole period's rent reached the landlord.
+        vm.prank(arbiter);
+        escrow.resolveDispute(id, 7_500);
+        assertEq(usdc.balanceOf(tenant), 450e6);
+        assertEq(usdc.balanceOf(landlord), 150e6);
+        IRentEscrow.TenantStats memory s = escrow.tenantStats(tenant);
+        assertEq(s.rentPaid, 150e6);
+        assertEq(s.periodsPaid, 1);
+        assertEq(s.depositsReturned, DEPOSIT);
+
+        // All to the tenant: no rent reached the landlord, so none is recorded as paid.
+        uint256 id2 = _createAndFund();
+        vm.warp(block.timestamp + 2 * uint256(PERIOD));
+        _dispute(id2);
+        vm.prank(arbiter);
+        escrow.resolveDispute(id2, 10_000);
+        s = escrow.tenantStats(tenant);
+        assertEq(s.rentPaid, 150e6);
+        assertEq(s.periodsPaid, 1);
+    }
+
+    function test_ResolveDispute_ZeroRentLeaseCountsEarnedPeriods() public {
+        vm.prank(landlord);
+        uint256 id = escrow.createLease(tenant, DEPOSIT, 0, PERIOD, PERIODS); // deposit-only lease
+        usdc.mint(tenant, DEPOSIT);
+        vm.startPrank(tenant);
+        usdc.approve(address(escrow), DEPOSIT);
+        escrow.fundLease(id);
+        vm.stopPrank();
+        vm.warp(block.timestamp + 2 * uint256(PERIOD));
+        _dispute(id);
+
+        vm.prank(arbiter);
+        escrow.resolveDispute(id, 10_000);
+        IRentEscrow.TenantStats memory s = escrow.tenantStats(tenant);
+        assertEq(s.periodsPaid, 2); // the same count claimRent would have recorded
+        assertEq(s.rentPaid, 0);
+        assertEq(s.depositsReturned, DEPOSIT);
     }
 
     function test_ResolveDispute_FullBpsAllToTenantCapsDepositsReturned() public {
@@ -737,7 +789,16 @@ contract RentEscrowTest is Test {
         uint256 unearned = uint256(RENT) * (PERIODS - earned);
         uint256 depositBack = toTenant > unearned ? toTenant - unearned : 0;
         if (depositBack > DEPOSIT) depositBack = DEPOSIT;
-        assertEq(escrow.tenantStats(tenant).depositsReturned, depositBack);
+        IRentEscrow.TenantStats memory s = escrow.tenantStats(tenant);
+        assertEq(s.depositsReturned, depositBack);
+
+        // rentPaid: claimed rent plus the earned rent the landlord got in the ruling. Seen from the
+        // landlord's end, its payout is earned-but-unclaimed rent first, then deposit, then unearned rent.
+        uint256 earnedUnclaimed = uint256(RENT) * earned - landlordBefore;
+        uint256 rentViaRuling = toLandlord < earnedUnclaimed ? toLandlord : earnedUnclaimed;
+        assertEq(s.rentPaid, landlordBefore + rentViaRuling);
+        assertEq(s.periodsPaid, (landlordBefore + rentViaRuling) / RENT);
+        assertLe(s.rentPaid, uint256(RENT) * earned);
     }
 
     // ------------------------------------------------------------------ multi-lease accounting
