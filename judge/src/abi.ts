@@ -90,6 +90,13 @@ export const aiArbiterAbi = [
   },
   {
     "type": "function",
+    "name": "acceptHuman",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "agent",
     "inputs": [],
     "outputs": [
@@ -244,6 +251,19 @@ export const aiArbiterAbi = [
   {
     "type": "function",
     "name": "human",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingHuman",
     "inputs": [],
     "outputs": [
       {
@@ -515,6 +535,25 @@ export const aiArbiterAbi = [
   },
   {
     "type": "event",
+    "name": "HumanTransferStarted",
+    "inputs": [
+      {
+        "name": "currentHuman",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "pendingHuman",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "HumanUpdated",
     "inputs": [
       {
@@ -750,6 +789,11 @@ export const aiArbiterAbi = [
         "internalType": "uint256"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "NotPendingHuman",
+    "inputs": []
   },
   {
     "type": "error",

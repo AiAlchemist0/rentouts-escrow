@@ -219,7 +219,7 @@ contract ArbiterHandler is Test {
         address outsider = [stranger, agent, human][callerSeed % 3];
         bool ok;
         _record();
-        uint256 w = which % 8;
+        uint256 w = which % 9;
         if (w == 0) {
             vm.prank(notAgent[callerSeed % 3]);
             try arb.propose(id, bps, bytes32(0), 0, "") {
@@ -255,9 +255,14 @@ contract ArbiterHandler is Test {
             try arb.appeal(id) {
                 ok = true;
             } catch {}
-        } else {
+        } else if (w == 7) {
             vm.prank(outsider);
             try arb.submitEvidence(id, "outsider") {
+                ok = true;
+            } catch {}
+        } else {
+            vm.prank(notHuman[callerSeed % 3]); // nobody was nominated: nobody can take the role
+            try arb.acceptHuman() {
                 ok = true;
             } catch {}
         }

@@ -554,22 +554,86 @@ contract AIArbiterTest is Test {
         emit AIArbiter.ChallengeWindowUpdated(WINDOW, 3 days);
         arb.setChallengeWindow(3 days);
         vm.expectEmit(address(arb));
-        emit AIArbiter.HumanUpdated(human, safe);
+        emit AIArbiter.HumanTransferStarted(human, safe);
         arb.setHuman(safe);
         vm.stopPrank();
+        assertEq(arb.human(), human); // nominated, not yet the human
+        assertEq(arb.pendingHuman(), safe);
+
+        vm.expectEmit(address(arb));
+        emit AIArbiter.HumanUpdated(human, safe);
+        vm.prank(safe);
+        arb.acceptHuman();
 
         assertEq(arb.agent(), newAgent);
         assertEq(arb.challengeWindow(), 3 days);
         assertEq(arb.human(), safe);
+        assertEq(arb.pendingHuman(), address(0));
         vm.prank(human); // the old human is out
         vm.expectRevert(AIArbiter.NotHuman.selector);
         arb.setAgent(agent);
     }
 
+    /// A mistyped handover must not strand an appealed lease: only the human can close it, and
+    /// RentEscrow's arbiter is immutable. The old human keeps the role until the nominee accepts.
+    function test_SetHuman_AWrongAddressDoesNotStrandAppealedLeases() public {
+        uint256 id = _disputed();
+        _propose(id, 0);
+        vm.prank(tenant);
+        arb.appeal(id);
+
+        vm.prank(human);
+        arb.setHuman(address(0xdead)); // typo: nobody holds this key
+        assertEq(arb.human(), human);
+
+        // Nobody else can take the role, and the agent / execute still cannot close the lease.
+        address[4] memory notNominee = [stranger, agent, tenant, human];
+        for (uint256 i; i < notNominee.length; i++) {
+            vm.prank(notNominee[i]);
+            vm.expectRevert(AIArbiter.NotPendingHuman.selector);
+            arb.acceptHuman();
+        }
+        vm.warp(vm.getBlockTimestamp() + 365 days);
+        vm.expectRevert(abi.encodeWithSelector(AIArbiter.NoOpenProposal.selector, id, AIArbiter.Status.APPEALED));
+        arb.execute(id);
+
+        // The real human still rules, and can cancel the bad nomination.
+        vm.startPrank(human);
+        arb.resolveByHuman(id, 5000);
+        vm.expectEmit(address(arb));
+        emit AIArbiter.HumanTransferStarted(human, address(0));
+        arb.setHuman(address(0));
+        vm.stopPrank();
+        assertEq(uint8(_status(id)), uint8(AIArbiter.Status.HUMAN_RESOLVED));
+        assertEq(arb.pendingHuman(), address(0));
+        vm.prank(address(0xdead));
+        vm.expectRevert(AIArbiter.NotPendingHuman.selector);
+        arb.acceptHuman();
+    }
+
+    function test_AcceptHuman_NoNomineeNobody() public {
+        address[4] memory callers = [stranger, agent, human, address(0)];
+        for (uint256 i; i < callers.length; i++) {
+            vm.prank(callers[i]);
+            vm.expectRevert(AIArbiter.NotPendingHuman.selector);
+            arb.acceptHuman();
+        }
+        // A second nomination replaces the first.
+        address safe = makeAddr("safe");
+        vm.startPrank(human);
+        arb.setHuman(stranger);
+        arb.setHuman(safe);
+        vm.stopPrank();
+        vm.prank(stranger);
+        vm.expectRevert(AIArbiter.NotPendingHuman.selector);
+        arb.acceptHuman();
+        vm.prank(safe);
+        arb.acceptHuman();
+        assertEq(arb.human(), safe);
+    }
+
     function test_Setters_Bounds() public {
         vm.startPrank(human);
-        vm.expectRevert(AIArbiter.ZeroAddress.selector);
-        arb.setHuman(address(0));
         vm.expectRevert(abi.encodeWithSelector(AIArbiter.InvalidChallengeWindow.selector, uint32(59)));
         arb.setChallengeWindow(59);
         vm.expectRevert(abi.encodeWithSelector(AIArbiter.InvalidChallengeWindow.selector, uint32(30 days + 1)));
@@ -627,6 +691,8 @@ contract AIArbiterTest is Test {
         fresh.setChallengeWindow(600);
         fresh.setHuman(stranger);
         vm.stopPrank();
+        vm.prank(stranger);
+        fresh.acceptHuman();
         VmSafe.AccountAccess[] memory accesses = vm.stopAndReturnStateDiff();
 
         (uint256 forbidden, uint256 resolves) = classifyArbiterCalls(accesses, address(fresh), address(e));

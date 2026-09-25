@@ -12,8 +12,9 @@ import {IRentEscrow} from "./interfaces/IRentEscrow.sol";
 ///           for a disputed lease, never resolve one. address(0) switches AI proposals off.
 ///         - `human`: the human arbiter (an EOA on testnet, a Safe in production). It can resolve
 ///           any disputed lease directly, at any time, with or without a proposal (this overrides
-///           a proposal that has not been executed yet), and it sets the agent, the human and the
-///           challenge window.
+///           a proposal that has not been executed yet), and it sets the agent and the challenge
+///           window. It hands its own role over in two steps (setHuman, then acceptHuman by the
+///           new address), because an appealed lease can only ever be closed by the human.
 ///
 ///         Flow:
 ///           escrow.openDispute (tenant or landlord)
@@ -72,6 +73,8 @@ contract AIArbiter is ReentrancyGuard {
     /// @notice The RentEscrow whose immutable arbiter is this contract; zero until bindEscrow.
     IRentEscrow public escrow;
     address public human;
+    /// @notice The address setHuman nominated; it becomes `human` only when it calls acceptHuman.
+    address public pendingHuman;
     /// @notice The AI judge service key; address(0) = AI proposals off.
     address public agent;
     /// @notice Seconds a proposal stays appealable. Applies to proposals made after it is set.
@@ -82,6 +85,8 @@ contract AIArbiter is ReentrancyGuard {
     mapping(uint256 leaseId => mapping(address party => uint256 count)) public evidenceCount;
 
     event EscrowBound(address indexed escrow);
+    /// @notice setHuman nominated `pendingHuman` (address(0): a pending handover was cancelled).
+    event HumanTransferStarted(address indexed currentHuman, address indexed pendingHuman);
     event HumanUpdated(address indexed previousHuman, address indexed newHuman);
     event AgentUpdated(address indexed previousAgent, address indexed newAgent);
     event ChallengeWindowUpdated(uint32 previousWindow, uint32 newWindow);
@@ -105,6 +110,7 @@ contract AIArbiter is ReentrancyGuard {
 
     error ZeroAddress();
     error NotHuman();
+    error NotPendingHuman();
     error NotAgent();
     error NotParty(uint256 leaseId);
     /// @notice The agent or the human is the lease's own tenant or landlord.
@@ -168,11 +174,24 @@ contract AIArbiter is ReentrancyGuard {
         emit EscrowBound(address(escrow_));
     }
 
-    /// @notice Hands the human role to `newHuman` (e.g. from a testnet EOA to a Safe).
+    /// @notice Step 1 of handing the human role to `newHuman` (e.g. from a testnet EOA to a Safe).
+    ///         The current human keeps the role until `newHuman` calls acceptHuman, so a mistyped
+    ///         address cannot strand appealed leases (only the human can close those, and
+    ///         RentEscrow's arbiter is immutable). A new call replaces the nominee; address(0)
+    ///         cancels.
+    // forge-lint: disable-next-item(missing-zero-check) -- address(0) cancels a pending handover
     function setHuman(address newHuman) external onlyHuman {
-        if (newHuman == address(0)) revert ZeroAddress();
+        pendingHuman = newHuman;
+        emit HumanTransferStarted(human, newHuman);
+    }
+
+    /// @notice Step 2: the address setHuman nominated takes the human role.
+    function acceptHuman() external {
+        address newHuman = pendingHuman;
+        if (newHuman == address(0) || msg.sender != newHuman) revert NotPendingHuman();
         address previous = human;
         human = newHuman;
+        pendingHuman = address(0);
         emit HumanUpdated(previous, newHuman);
     }
 
