@@ -1,0 +1,12 @@
+{
+  "baseSepolia": {
+    "chainId": 84532,
+    "LeaseShare1155": {
+      "address": "0x5490e5dFcDcA741aC99127f66B4abf6204cd64C5",
+      "deployer": "0x7F9B28D7BAe7c891AfEb9bD9A6620221163aa70D",
+      "deployTx": "0x76164bf89428462ed9b8220f609cefa101efce9d4a8d677d16a27083c332400c",
+      "explorer": "https://sepolia.basescan.org/address/0x5490e5dFcDcA741aC99127f66B4abf6204cd64C5",
+      "verified": "sourcify"
+    }
+  }
+}

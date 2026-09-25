@@ -1,0 +1,14 @@
+# Foundry
+out/
+cache/
+broadcast/
+lib/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Node (frontend, added later)
+node_modules/
+dist/
