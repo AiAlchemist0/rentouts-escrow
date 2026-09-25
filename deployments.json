@@ -8,5 +8,23 @@
       "explorer": "https://sepolia.basescan.org/address/0x5490e5dFcDcA741aC99127f66B4abf6204cd64C5",
       "verified": "sourcify"
     }
+  },
+  "sepoliaAIArbiter": {
+    "agent": "0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA",
+    "aiArbiter": "0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5",
+    "chainId": 11155111,
+    "challengeWindow": 120,
+    "deployer": "0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE",
+    "fromBlock": 11780900,
+    "human": "0x798b01Cef62b889943Ce1D3C5011a755B297e486"
+  },
+  "sepolia": {
+    "arbiter": "0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5",
+    "chainId": 11155111,
+    "deployer": "0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE",
+    "humanGate": "0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd",
+    "leaseShare1155": "0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09",
+    "rentEscrow": "0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18",
+    "token": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
   }
 }
