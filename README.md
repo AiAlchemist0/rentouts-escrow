@@ -78,7 +78,7 @@ forge test --match-path 'test/RentEscrow*' -vv   # 53 unit/fuzz tests + 4 invari
 forge test --match-path test/HumanGate.t.sol      # 16 human-gate tests
 forge test --match-path test/DeployEscrow.t.sol   # 15 deploy-script tests
 forge test --match-path 'test/AIArbiter*'         # 34 AIArbiter tests + 3 invariants (AI-1..AI-3)
-forge test                                        # everything, incl. the 12 LeaseShare1155 tests (134 total)
+forge test                                        # everything, incl. the 12 LeaseShare1155 tests (137 total)
 ```
 
 Unit tests cover every function and exact custom-error revert, partial / complete claims with `vm.warp`, the close grace rule, cancel, 0 / 5000 / 10000 bps splits (plus a fuzzed split), share minting and the non-allowlisted-landlord revert, re-entry through the ERC-1155 receive hook, the arbiter never being a party, tenant-stats accounting (including how a dispute payout splits into refunded rent, returned deposit and rent paid), and the way out when USDC blacklists the landlord or the tenant.
