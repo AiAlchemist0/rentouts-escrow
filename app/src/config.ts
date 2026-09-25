@@ -53,13 +53,26 @@ const configured = resolveContracts(
 )
 
 /**
+ * CredentialSync from ens/deployments/sepolia.json (written by `ens.sh credentialSync`), trusted only when
+ * the escrow it was deployed for is the escrow this app uses.
+ */
+function recordedCredentialSync(): Address | undefined {
+  const record = deployment as { credentialSync?: string; escrow?: string }
+  const sync = optionalAddress(record.credentialSync)
+  const forEscrow = optionalAddress(record.escrow)
+  if (!sync) return undefined
+  if (configured.escrow && forEscrow && getAddress(forEscrow) !== getAddress(configured.escrow)) return undefined
+  return sync
+}
+
+/**
  * Contracts that may not be deployed yet: VITE_* env vars first, then deployments.json. `undefined` = not
  * configured; the UI degrades. Once the escrow is read, its token(), leaseShare(), humanGate() and arbiter() win.
  */
 export const ENV_CONTRACTS = {
   escrow: configured.escrow,
   leaseShare: configured.leaseShare,
-  credentialSync: optionalAddress(env.VITE_CREDENTIAL_SYNC_ADDRESS),
+  credentialSync: optionalAddress(env.VITE_CREDENTIAL_SYNC_ADDRESS) ?? recordedCredentialSync(),
   token: configured.token ?? CIRCLE_USDC,
   humanGate: configured.humanGate,
   arbiter: configured.arbiter,

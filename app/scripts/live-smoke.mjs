@@ -84,7 +84,10 @@ const recordedEscrow = !envEscrow || same(envEscrow, asAddress(core.rentEscrow))
 const configured = {
   aiArbiter: asAddress(env.VITE_AI_ARBITER_ADDRESS) ?? asAddress(ai.aiArbiter),
   leaseShare: asAddress(env.VITE_LEASE_SHARE_ADDRESS) ?? (recordedEscrow ? asAddress(core.leaseShare1155) : undefined),
-  credentialSync: asAddress(env.VITE_CREDENTIAL_SYNC_ADDRESS),
+  // Like src/config.ts: env first, then ens/deployments/sepolia.json if it was deployed for this escrow.
+  credentialSync:
+    asAddress(env.VITE_CREDENTIAL_SYNC_ADDRESS) ??
+    (!asAddress(ens.escrow) || !escrow || same(asAddress(ens.escrow), escrow) ? asAddress(ens.credentialSync) : undefined),
   token: asAddress(env.VITE_TOKEN_ADDRESS) ?? (recordedEscrow ? asAddress(core.token) : undefined),
   humanGate: recordedEscrow ? asAddress(core.humanGate) : undefined,
 }
