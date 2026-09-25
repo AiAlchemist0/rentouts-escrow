@@ -5,3 +5,4 @@ broadcast/*/dry-run/
 deployments/.commit-*.json
 node_modules/
 foundry-pp/
+test/tmp_*.t.sol
