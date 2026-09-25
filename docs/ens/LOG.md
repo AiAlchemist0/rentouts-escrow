@@ -149,6 +149,12 @@ Deployer for all of them: `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE`.
 
 Sourcify pages: `https://repo.sourcify.dev/11155111/<address>`. Etherscan needs an `ETHERSCAN_API_KEY`, which wasn't used here (open item).
 
+**Sat 03:35: merged to `main` (PRs #3 to #7, merge commits, 84 build commits kept).**
+- PRs: [#3 RentEscrow + human gate](https://github.com/AiAlchemist0/rentouts-escrow/pull/3), [#4 ENS identity + CredentialSync](https://github.com/AiAlchemist0/rentouts-escrow/pull/4), [#5 AI dispute judge](https://github.com/AiAlchemist0/rentouts-escrow/pull/5), [#6 demo frontend](https://github.com/AiAlchemist0/rentouts-escrow/pull/6), [#7 docs](https://github.com/AiAlchemist0/rentouts-escrow/pull/7). `main` = `b8b6441`.
+- Before merging, the full order was rehearsed in a scratch clone of GitHub `main` (all clean). Codex (gpt-6-astra) + Fable reviewed every package; each finding was adversarially verified, and the confirmed ones were fixed before the merge.
+- A fresh clone of `main` is green: root forge 137/137 (incl. invariants INV-1…4, AI-1…3), ens fork tests 42/42 against live Sepolia, judge 92/92, app 94/94 + production build, `app/scripts/live-smoke.mjs` all wiring checks passed with no local env, and ENS live read OK.
+- Still open: Etherscan verification (needs an API key; Sourcify + Blockscout are exact-match), the first live demo lease + `CredentialSync.sync(alice)`, World ID via `HumanGate.setVerifier` (Sat), and the ENS writeup + FEEDBACK.md.
+
 ---
 
 ## Open items
