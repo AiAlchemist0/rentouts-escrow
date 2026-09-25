@@ -6,6 +6,7 @@ import {
   bpsToPercent,
   disputeLog,
   formatBps,
+  judgeFor,
   judgeView,
   percentToBps,
   splitEscrow,
@@ -219,5 +220,28 @@ describe('aiArbiterProblem', () => {
     expect(aiArbiterProblem({ aiArbiter, boundEscrow: undefined, escrow, escrowArbiter: aiArbiter })).toMatch(/bindEscrow/)
     expect(aiArbiterProblem({ aiArbiter, boundEscrow: landlord, escrow, escrowArbiter: aiArbiter })).toMatch(/another escrow/)
     expect(aiArbiterProblem({ aiArbiter, boundEscrow: escrow, escrow, escrowArbiter: agent })).toMatch(/arbiter is 0x4a44…d0dA/)
+  })
+})
+
+describe('judgeFor', () => {
+  const info = (boundEscrow: `0x${string}` | undefined) => ({ address: aiArbiter as `0x${string}`, boundEscrow, human: landlord })
+  const otherEscrow = '0x3333333333333333333333333333333333333333'
+
+  it('hands the lease screen an AIArbiter bound to this escrow and set as its arbiter', () => {
+    const good = info(escrow)
+    expect(judgeFor(good, escrow, aiArbiter)).toEqual({ judge: good })
+    expect(judgeFor(undefined, escrow, aiArbiter)).toEqual({})
+  })
+
+  it('withholds an AIArbiter bound to another escrow: its lease #1 is not this escrow’s lease #1', () => {
+    // Its resolveByHuman(1, bps) would settle lease #1 of the other escrow; the page must not offer it at all.
+    const state = judgeFor(info(otherEscrow), escrow, aiArbiter)
+    expect(state.judge).toBeUndefined()
+    expect(state.problem).toMatch(/another escrow/)
+  })
+
+  it('withholds an unbound AIArbiter, or one this escrow doesn’t use as its arbiter', () => {
+    expect(judgeFor(info(undefined), escrow, aiArbiter)).toEqual({ problem: expect.stringMatching(/bindEscrow/) })
+    expect(judgeFor(info(escrow), escrow, agent)).toEqual({ problem: expect.stringMatching(/arbiter is/) })
   })
 })

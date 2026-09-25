@@ -33,9 +33,8 @@ const shortHash = (hash: string) => `${hash.slice(0, 10)}…${hash.slice(-8)}`
 type Props = {
   lease: LeaseRow
   account: Address | undefined
+  /** An AIArbiter bound to this escrow and set as its arbiter (useAiArbiter().judge), never one with a problem. */
   info: AiArbiterInfo
-  /** Why AI rulings can't settle this escrow's disputes (not bound, ...). */
-  problem?: string
   now: number
   nameOf: (address: Address) => string | undefined
 }
@@ -224,7 +223,7 @@ function HumanResolve({
  * challenge-window countdown, appeal / execute, and the human arbiter's override. Also shows the final record on
  * a lease closed through AIArbiter.
  */
-export function AiJudgePanel({ lease, account, info, problem, now, nameOf }: Props) {
+export function AiJudgePanel({ lease, account, info, now, nameOf }: Props) {
   const { tokenDecimals, tokenSymbol } = useContracts()
   const disputed = lease.state === LeaseState.DISPUTED
   const rulingQuery = useRuling(info, lease, disputed)
@@ -266,7 +265,6 @@ export function AiJudgePanel({ lease, account, info, problem, now, nameOf }: Pro
       </div>
       <p className="judge-rule">{AI_ONLY_PROPOSES}</p>
 
-      {problem ? <Notice tone="warn">{problem}</Notice> : null}
       {disputed && !info.agent ? (
         <Notice>AI proposals are switched off on this contract (no judge key set). The human arbiter rules directly.</Notice>
       ) : null}

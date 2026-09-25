@@ -235,3 +235,19 @@ export function aiArbiterProblem({
   }
   return null
 }
+
+/**
+ * The AIArbiter this page may read rulings from and send transactions to, or the problem that rules it out. Any
+ * aiArbiterProblem blocks it: AIArbiter settles a lease id on the escrow *it* is bound to, and lease ids restart
+ * at 1 in every escrow, so appeal / execute / resolveByHuman sent through another escrow's AIArbiter could close
+ * a different lease, and its getRuling describes that other lease.
+ */
+export function judgeFor<T extends { address: Address; boundEscrow?: Address }>(
+  info: T | undefined,
+  escrow: Address | undefined,
+  escrowArbiter: Address | undefined,
+): { judge?: T; problem?: string } {
+  if (!info) return {}
+  const problem = aiArbiterProblem({ aiArbiter: info.address, boundEscrow: info.boundEscrow, escrow, escrowArbiter })
+  return problem ? { problem } : { judge: info }
+}

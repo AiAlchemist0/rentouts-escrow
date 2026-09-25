@@ -14,7 +14,7 @@ import {
   useRentoutsNames,
   useTx,
   useWallet,
-  type AiArbiterState,
+  type AiArbiterInfo,
   type LeaseRow,
 } from '../hooks'
 import { formatCountdown, formatDuration, formatToken } from '../lib/format'
@@ -99,9 +99,10 @@ function ShareLine({ lease }: { lease: LeaseRow }) {
   )
 }
 
-function LeaseCard({ lease, account, ai }: { lease: LeaseRow; account: Address | undefined; ai: AiArbiterState }) {
+/** `judge`: the AIArbiter of this escrow (useAiArbiter().judge), or undefined when there is none or it has a problem. */
+function LeaseCard({ lease, account, judge }: { lease: LeaseRow; account: Address | undefined; judge: AiArbiterInfo | undefined }) {
   const { escrow, arbiter, tokenDecimals, tokenSymbol } = useContracts()
-  const nameOf = useRentoutsNames([lease.landlord, lease.tenant, ...(ai.info ? [ai.info.human] : [])])
+  const nameOf = useRentoutsNames([lease.landlord, lease.tenant, ...(judge ? [judge.human] : [])])
   const now = useNow()
   const tx = useTx()
   const timing = leaseTiming(lease, now)
@@ -110,7 +111,7 @@ function LeaseCard({ lease, account, ai }: { lease: LeaseRow; account: Address |
   const isLandlord = same(account, lease.landlord)
   const isTenant = same(account, lease.tenant)
   const isArbiter = same(account, arbiter)
-  const isHuman = same(account, ai.info?.human)
+  const isHuman = same(account, judge?.human)
   const active = lease.state === LeaseState.ACTIVE
   const verbs = { claimRent: 'Release rent on', closeLease: 'Close', openDispute: 'Open dispute on', cancelLease: 'Cancel' }
   const call = (functionName: keyof typeof verbs) =>
@@ -136,7 +137,7 @@ function LeaseCard({ lease, account, ai }: { lease: LeaseRow; account: Address |
         ? 'Term over. The lease can be closed.'
         : `Term over. The landlord can close it now; anyone can in ${formatCountdown(timing.publicCloseAt - now)}.`
   } else if (lease.state === LeaseState.DISPUTED) {
-    clock = ai.info
+    clock = judge
       ? 'Frozen while the dispute is settled: the AI judge proposes, the human arbiter has the last word.'
       : 'Frozen until the escrow’s arbiter resolves the dispute.'
   }
@@ -223,12 +224,12 @@ function LeaseCard({ lease, account, ai }: { lease: LeaseRow; account: Address |
       </div>
       <TxStatus state={tx.state} />
 
-      {ai.info && (lease.state === LeaseState.DISPUTED || lease.state === LeaseState.CLOSED) ? (
-        <AiJudgePanel lease={lease} account={account} info={ai.info} problem={ai.problem} now={now} nameOf={nameOf} />
+      {judge && (lease.state === LeaseState.DISPUTED || lease.state === LeaseState.CLOSED) ? (
+        <AiJudgePanel lease={lease} account={account} info={judge} now={now} nameOf={nameOf} />
       ) : null}
       {/* A contract arbiter never connects a wallet, so this is only for a plain-account arbiter. */}
       {lease.state === LeaseState.DISPUTED && isArbiter ? <ResolveDispute lease={lease} /> : null}
-      {lease.state === LeaseState.DISPUTED && !ai.info && !isArbiter && arbiter ? (
+      {lease.state === LeaseState.DISPUTED && !judge && !isArbiter && arbiter ? (
         <p className="hint">
           Arbiter: <AddressLink address={arbiter} />. It settles the dispute with a split of the remaining escrow.
         </p>
@@ -254,7 +255,7 @@ export function LeasesPanel() {
   const [showAll, setShowAll] = useState(false)
 
   const all = leases.data ?? []
-  const isArbiter = same(address, arbiter) || same(address, ai.info?.human)
+  const isArbiter = same(address, arbiter) || same(address, ai.judge?.human)
   const mine = all.filter((l) => same(address, l.landlord) || same(address, l.tenant))
   // A dispute the arbiter has seen stays listed after it closes, so its ruling doesn't vanish on success.
   const [seenDisputes, setSeenDisputes] = useState<ReadonlySet<bigint>>(new Set())
@@ -277,6 +278,12 @@ export function LeasesPanel() {
       </div>
       {escrowError ? <Notice tone="error">{escrowError}</Notice> : null}
       {ai.error ? <Notice tone="error">{ai.error}</Notice> : null}
+      {ai.problem ? (
+        <Notice tone="warn">
+          {ai.problem} The AI judge panel is off on this page until that’s fixed, so nothing is read from or sent to
+          that contract.
+        </Notice>
+      ) : null}
       {!escrow ? (
         <NotConfigured what="The escrow" envVar="VITE_ESCROW_ADDRESS" />
       ) : leases.isPending ? (
@@ -310,7 +317,7 @@ export function LeasesPanel() {
           ) : (
             <ul className="list">
               {visible.map((lease) => (
-                <LeaseCard key={String(lease.id)} lease={lease} account={address} ai={ai} />
+                <LeaseCard key={String(lease.id)} lease={lease} account={address} judge={ai.judge} />
               ))}
             </ul>
           )}

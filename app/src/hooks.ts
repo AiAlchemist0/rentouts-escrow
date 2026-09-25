@@ -23,7 +23,7 @@ import { rentEscrowAbi } from './abi/rentEscrow'
 import { rentoutsSubnamesAbi } from './abi/rentoutsSubnames'
 import { CREDENTIAL_KEYS, ENS, ENV_CONTRACTS } from './config'
 import { parseAddressInput, resolveAddressInput, type ResolvedInput } from './lib/addressInput'
-import { aiArbiterProblem, type ArbiterLog, type Ruling } from './lib/aiJudge'
+import { judgeFor, type ArbiterLog, type Ruling } from './lib/aiJudge'
 import { labelUnder, type CredentialRecords } from './lib/credential'
 import { errorMessage } from './lib/errors'
 import type { HumanGateView } from './lib/humanGate'
@@ -459,7 +459,10 @@ export type AiArbiterInfo = {
 }
 
 export type AiArbiterState = {
+  /** The AIArbiter that was read, usable or not (the footer lists it). */
   info?: AiArbiterInfo
+  /** `info` when it's bound to this escrow and is its arbiter: the only one the lease screen acts through. */
+  judge?: AiArbiterInfo
   /** Why AI rulings can't settle this escrow's disputes (not bound, bound elsewhere, not the escrow's arbiter). */
   problem?: string
   /** A configured AIArbiter (env / deployments.json) that can't be read. */
@@ -513,8 +516,7 @@ export function useAiArbiter(): AiArbiterState {
       ? { error: `Couldn’t read the AI judge contract at ${configured}. Check VITE_AI_ARBITER_ADDRESS or deployments.json. (${errorMessage(query.error)})` }
       : {}
   }
-  const problem = aiArbiterProblem({ aiArbiter: info.address, boundEscrow: info.boundEscrow, escrow, escrowArbiter: arbiter })
-  return { info, problem: problem ?? undefined }
+  return { info, ...judgeFor(info, escrow, arbiter) }
 }
 
 /** Public RPCs cap eth_getLogs ranges (publicnode: 50k blocks). */
