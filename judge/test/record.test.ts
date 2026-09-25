@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { decide } from '../src/decide.ts'
 import { mockAnswers } from '../src/providers/mock.ts'
-import { verifyOnchain, verifySaved } from '../src/record.ts'
+import { proposedPath, recordPath, verifyOnchain, verifySaved } from '../src/record.ts'
 import type { Hex } from '../src/types.ts'
 import { fixture } from './helpers.ts'
 
@@ -30,6 +30,15 @@ function chain(onchain: { status: number; tenantBps?: number; confidenceBps?: nu
     } as never,
   }
 }
+
+describe('record paths', () => {
+  it('one file per ruling hash; the per-lease file is a separate name', () => {
+    const stem = `ruling-11155111-${input.arbiter.toLowerCase()}-${input.lease.leaseId}`
+    expect(recordPath('/o', d.ruling, d.rulingHash)).toBe(`/o/${stem}-${d.rulingHash}.json`)
+    expect(recordPath('/o', d.ruling, `0x${'cd'.repeat(32)}`)).not.toBe(recordPath('/o', d.ruling, d.rulingHash))
+    expect(proposedPath('/o', d.ruling)).toBe(`/o/${stem}.json`)
+  })
+})
 
 describe('verifySaved', () => {
   it('passes the file the CLI writes, and names the tampered part', () => {

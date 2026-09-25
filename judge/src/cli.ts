@@ -2,8 +2,7 @@
 // RentOuts AI dispute judge.
 //   npm run judge -- --lease <id> [--provider glm|mock] [--propose]
 // See judge/README.md. Secrets come from the environment only (run.sh loads the team secrets file).
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 import { createPublicClient, formatUnits, getAddress, http, isAddress } from 'viem'
 import { sepolia } from 'viem/chains'
@@ -12,7 +11,7 @@ import { loadDisputeInput, NotDisputedError, type ArbiterState } from './chain.t
 import { abstainWithoutModel, confidenceBasis, decide, type Decision } from './decide.ts'
 import { createProvider, isProviderName, PROVIDERS } from './providers/index.ts'
 import { sendProposal } from './propose.ts'
-import { verifyOnchain, verifySaved } from './record.ts'
+import { proposedPath, recordPath, verifyOnchain, verifySaved, writeRecord, type SavedRuling } from './record.ts'
 import type { Address, DisputeInput } from './types.ts'
 
 const DEFAULT_RPC = 'https://ethereum-sepolia-rpc.publicnode.com'
@@ -29,7 +28,11 @@ const USAGE = `RentOuts AI dispute judge
   --rpc <url>          Sepolia RPC (default $SEPOLIA_RPC_URL, else ${DEFAULT_RPC})
   --from-block <n>     first block to scan for the dispute's logs (default: the AIArbiter record)
   --input <file>       judge a saved DisputeInput JSON instead of reading the chain (no --propose)
-  --out <file>         where to save the ruling (default out/ruling-<chainId>-<arbiter>-<lease>.json)
+  --out-dir <dir>      where rulings are saved (default judge/out). Every run writes
+                       ruling-<chainId>-<arbiter>-<lease>-<rulingHash>.json (never overwrites
+                       another ruling); a confirmed --propose also writes
+                       ruling-<chainId>-<arbiter>-<lease>.json, the ruling behind that proposal
+  --out <file>         save this run's ruling here instead of the hash-named file
   --json               print the ruling JSON on stdout (the report goes to stderr)
   --verify <file>      check a saved ruling and exit 0 (ok) or 1: its rulingHash, and that its
                        saved input (facts + statements) is the one the ruling committed to
@@ -128,6 +131,7 @@ async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<number> {
       'from-block': { type: 'string' },
       input: { type: 'string' },
       out: { type: 'string' },
+      'out-dir': { type: 'string' },
       json: { type: 'boolean', default: false },
       verify: { type: 'string' },
       onchain: { type: 'boolean', default: false },
@@ -203,12 +207,12 @@ async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<number> {
 
   for (const line of report(input, decision, meta, arbiterState)) say(line)
 
-  const out = values.out ?? new URL(`../out/ruling-${input.chainId}-${input.arbiter.toLowerCase()}-${input.lease.leaseId}.json`, import.meta.url).pathname
-  mkdirSync(dirname(out), { recursive: true })
-  writeFileSync(
-    out,
-    `${JSON.stringify({ rulingHash: decision.rulingHash, ruling: decision.ruling, input, meta: { ...meta, savedAt: new Date().toISOString() } }, null, 2)}\n`,
-  )
+  // Saved before anything is sent, under a name that holds the hash: the preimage of a rulingHash
+  // that goes on-chain is never overwritten by a later run.
+  const outDir = values['out-dir'] ?? new URL('../out/', import.meta.url).pathname
+  const saved: SavedRuling = { rulingHash: decision.rulingHash, ruling: decision.ruling, input, meta: { ...meta, savedAt: new Date().toISOString() } }
+  const out = values.out ?? recordPath(outDir, decision.ruling, decision.rulingHash)
+  writeRecord(out, saved)
   say(`  saved         ${out}`)
   if (values.json) console.log(canonicalJson(decision.ruling))
 
@@ -236,6 +240,9 @@ async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<number> {
     log: say,
   })
   say(`  proposed      confirmed on-chain`)
+  const proposed = proposedPath(outDir, decision.ruling)
+  writeRecord(proposed, { ...saved, meta: { ...saved.meta, proposal: { txHash, deadline: deadline?.toString() ?? null } } })
+  say(`  saved         ${proposed} (the ruling behind this proposal: --verify it with --onchain)`)
   if (deadline !== null) {
     say(`  appeal until  ${new Date(Number(deadline) * 1000).toISOString()} (then anyone can execute; the human can override until then)`)
   }

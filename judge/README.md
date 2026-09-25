@@ -32,7 +32,7 @@ npm run judge -- --input fixtures/injection.json --provider mock    # -> ABSTAIN
 
 `run.sh` sources the team secrets file (`../../.secrets/ai.env`, or the file in `JUDGE_SECRETS_FILE`) into its own process, then runs `node src/cli.ts`. It never prints the file. `npm run judge -- …` does the same thing using the environment you already have.
 
-Every run prints the lease, the answers, the rubric arithmetic, the decision, the **latency of the model call in ms**, and the `rulingHash`. It also saves the ruling to `out/ruling-<chainId>-<arbiter>-<lease>.json`. `--json` prints the ruling JSON on stdout. `--verify <file>` checks a saved ruling and exits 1 on any mismatch: the ruling must hash to the saved `rulingHash`, and the saved lease facts and statements must hash to the ruling's `inputHash`, so an edited statement or amount is caught. Add `--onchain` to also compare it with `AIArbiter.getRuling(lease)` (hash, and the split and confidence while the AI's proposal stands).
+Every run prints the lease, the answers, the rubric arithmetic, the decision, the **latency of the model call in ms**, and the `rulingHash`. It also saves the ruling, with the exact input it was made on, to `out/ruling-<chainId>-<arbiter>-<lease>-<rulingHash>.json`, before anything is sent. The name holds the hash, so a later run on the same lease (a dry run, an abstention, or a rerun that GLM answers differently) never overwrites the preimage of a hash that is already on-chain. After a confirmed `--propose` the same record is also written to `out/ruling-<chainId>-<arbiter>-<lease>.json`, which therefore always holds the ruling behind this machine's latest proposal for the lease. `--json` prints the ruling JSON on stdout. `--verify <file>` checks a saved ruling and exits 1 on any mismatch: the ruling must hash to the saved `rulingHash`, and the saved lease facts and statements must hash to the ruling's `inputHash`, so an edited statement or amount is caught. Add `--onchain` to also compare it with `AIArbiter.getRuling(lease)` (hash, and the split and confidence while the AI's proposal stands).
 
 | Flag | |
 | --- | --- |
@@ -43,7 +43,8 @@ Every run prints the lease, the answers, the rubric arithmetic, the decision, th
 | `--rpc <url>` | default `$SEPOLIA_RPC_URL`, else `https://ethereum-sepolia-rpc.publicnode.com` |
 | `--from-block <n>` | first block scanned for `DisputeOpened` / `Evidence`; default `$JUDGE_FROM_BLOCK`, else the AIArbiter record's `fromBlock`, else the last 50k blocks |
 | `--input <file>` | judge a saved `DisputeInput` (e.g. `fixtures/*.json`); cannot be combined with `--propose` |
-| `--out <file>`, `--json`, `--verify <file> [--onchain]` | see above |
+| `--out-dir <dir>` | where rulings are saved, default `judge/out` (gitignored) |
+| `--out <file>`, `--json`, `--verify <file> [--onchain]` | see above (`--out` replaces the hash-named file for this run) |
 
 ### Environment
 

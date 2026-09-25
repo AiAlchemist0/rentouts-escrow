@@ -1,9 +1,10 @@
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { canonicalHash } from '../src/canonical.ts'
+import { fixture } from './helpers.ts'
 
 const cwd = new URL('..', import.meta.url).pathname
 const dir = mkdtempSync(join(tmpdir(), 'judge-cli-'))
@@ -60,6 +61,27 @@ describe('npm run judge (offline --input, mock provider)', () => {
     const { input: _i, ...noInput } = saved
     writeFileSync(nh, JSON.stringify(noInput))
     expect(judge(['--verify', nh]).status).toBe(1)
+  })
+
+  it('every run keeps its own record: a later run on the same lease never overwrites an earlier ruling', () => {
+    const outDir = join(dir, 'records')
+    const args = ['--input', 'fixtures/damage-admitted.json', '--provider', 'mock', '--out-dir', outDir]
+    const first = judge(args) // proposes
+    const rerun = judge(args, { JUDGE_MIN_CONFIDENCE: '0.95' }) // same lease, abstains: a different ruling
+    expect(first.status).toBe(0)
+    expect(rerun.status).toBe(0)
+    expect(rerun.stdout).toMatch(/ABSTAIN/)
+    const hashOf = (stdout: string) => stdout.match(/rulingHash\s+(0x[0-9a-f]{64})/)![1]!
+    const [a, b] = [hashOf(first.stdout), hashOf(rerun.stdout)]
+    expect(a).not.toBe(b)
+
+    const f = fixture('damage-admitted')
+    const stem = `ruling-${f.chainId}-${f.arbiter.toLowerCase()}-${f.lease.leaseId}`
+    // Both preimages are kept. No per-lease file: that one is written only after a confirmed --propose.
+    expect(readdirSync(outDir).sort()).toEqual([`${stem}-${a}.json`, `${stem}-${b}.json`].sort())
+    const kept = join(outDir, `${stem}-${a}.json`)
+    expect(JSON.parse(readFileSync(kept, 'utf8')).rulingHash).toBe(a)
+    expect(judge(['--verify', kept]).status).toBe(0)
   })
 
   it('--onchain only goes with --verify', () => {

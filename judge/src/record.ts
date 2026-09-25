@@ -1,3 +1,5 @@
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import type { PublicClient } from 'viem'
 import { aiArbiterAbi } from './abi.ts'
 import { canonicalHash } from './canonical.ts'
@@ -11,6 +13,32 @@ export interface SavedRuling {
   ruling: Ruling
   input: DisputeInput
   meta?: Record<string, unknown>
+}
+
+function leaseStem(ruling: Pick<Ruling, 'chainId' | 'arbiter' | 'leaseId'>): string {
+  return `ruling-${ruling.chainId}-${ruling.arbiter.toLowerCase()}-${ruling.leaseId}`
+}
+
+/**
+ * Where every run saves its ruling: `ruling-<chainId>-<arbiter>-<lease>-<rulingHash>.json`. The name
+ * holds the hash, so a later run (a dry run, an abstention, a rerun that GLM answers differently)
+ * never overwrites the preimage of a hash that may already be on-chain. Same name = same ruling.
+ */
+export function recordPath(outDir: string, ruling: Pick<Ruling, 'chainId' | 'arbiter' | 'leaseId'>, rulingHash: Hex): string {
+  return join(outDir, `${leaseStem(ruling)}-${rulingHash.toLowerCase()}.json`)
+}
+
+/**
+ * `ruling-<chainId>-<arbiter>-<lease>.json`: written only after AIArbiter.propose is confirmed, so it
+ * always holds the ruling behind this machine's latest proposal for the lease.
+ */
+export function proposedPath(outDir: string, ruling: Pick<Ruling, 'chainId' | 'arbiter' | 'leaseId'>): string {
+  return join(outDir, `${leaseStem(ruling)}.json`)
+}
+
+export function writeRecord(path: string, saved: SavedRuling): void {
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, `${JSON.stringify(saved, null, 2)}\n`)
 }
 
 export interface Check {
