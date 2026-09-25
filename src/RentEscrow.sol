@@ -238,6 +238,9 @@ contract RentEscrow is IRentEscrow, ReentrancyGuard {
     }
 
     /// @inheritdoc IRentEscrow
+    /// @dev Open to either party for as long as the lease is ACTIVE: after the term and after the
+    ///      grace window too, until someone calls closeLease. Moves no tokens, so it works even when
+    ///      the token blocks one party. There is no timeout: only the arbiter's ruling leaves DISPUTED.
     function openDispute(uint256 leaseId) external nonReentrant {
         Lease storage l = _leases[leaseId];
         _requireState(l, leaseId, State.ACTIVE);

@@ -512,6 +512,32 @@ contract RentEscrowTest is Test {
         escrow.closeLease(id);
     }
 
+    function test_OpenDispute_EitherPartyUntilClosedEvenAfterGrace_NoTimeout() public {
+        uint256 id = _createAndFund();
+        uint256 end = escrow.endTime(id);
+        vm.warp(end + PERIOD + 7 days); // well past the grace window, nobody has closed yet
+
+        // The tenant can still dispute, which pre-empts a keeper's close.
+        _dispute(id);
+        vm.prank(stranger);
+        vm.expectRevert(_invalidState(id, IRentEscrow.State.DISPUTED));
+        escrow.closeLease(id);
+
+        // No timeout: ten years on, only the arbiter can move the lease out of DISPUTED.
+        vm.warp(block.timestamp + 3650 days);
+        vm.prank(landlord);
+        vm.expectRevert(_invalidState(id, IRentEscrow.State.DISPUTED));
+        escrow.closeLease(id);
+        vm.expectRevert(_invalidState(id, IRentEscrow.State.DISPUTED));
+        escrow.claimRent(id);
+        assertEq(escrow.escrowBalance(id), TOTAL);
+
+        vm.prank(arbiter);
+        escrow.resolveDispute(id, 5_000);
+        assertEq(usdc.balanceOf(tenant), DEPOSIT);
+        assertEq(usdc.balanceOf(landlord), uint256(RENT) * PERIODS);
+    }
+
     function test_CloseLease_RevertsUnlessActive() public {
         uint256 id = _create();
         vm.prank(landlord);
