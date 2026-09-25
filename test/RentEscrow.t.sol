@@ -856,6 +856,32 @@ contract RentEscrowTest is Test {
         assertEq(usdc.balanceOf(address(escrow)), 0);
     }
 
+    function test_Stats_AreCountsThatOnlyAllowlistedLandlordsCanAddTo() public {
+        // A minimal lease (1 unit of deposit, no rent, one 60 s period) costs the tenant nothing
+        // but gas and still counts in full: tenantStats are counts, not weighted by value or term.
+        usdc.mint(tenant, 1);
+        for (uint256 i; i < 3; i++) {
+            vm.prank(landlord);
+            uint256 id = escrow.createLease(tenant, 1, 0, 60, 1);
+            vm.startPrank(tenant);
+            usdc.approve(address(escrow), 1);
+            escrow.fundLease(id);
+            vm.stopPrank();
+            vm.warp(block.timestamp + 60);
+            vm.prank(landlord);
+            escrow.closeLease(id);
+        }
+        IRentEscrow.TenantStats memory s = escrow.tenantStats(tenant);
+        assertEq(s.leasesCompleted, 3);
+        assertEq(s.depositsReturned, s.depositsPosted);
+        assertEq(usdc.balanceOf(tenant), 1);
+
+        // The sybil brake: a landlord the share owner has not allowlisted cannot open a lease.
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(LeaseShare1155.NotAllowlisted.selector, stranger));
+        escrow.createLease(tenant, 1, 0, 60, 1);
+    }
+
     function test_EscrowBalancesAreSegregatedPerLease() public {
         address landlord2 = makeAddr("landlord2");
         address tenant2 = makeAddr("tenant2");
