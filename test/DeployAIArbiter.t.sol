@@ -112,6 +112,7 @@ contract DeployAIArbiterTest is Test {
         address baseShare = vm.parseJsonAddress(original, ".baseSepolia.LeaseShare1155.address");
 
         address arb = makeAddr("aiArbiter");
+        vm.roll(9_300_000);
         script.record(UPSERT_FILE, deployer, human, agent, 120, makeAddr("old"));
         script.record(UPSERT_FILE, deployer, human, agent, 120, arb); // a redeploy replaces it
         new DeployEscrow()
@@ -125,6 +126,7 @@ contract DeployAIArbiterTest is Test {
         assertEq(vm.parseJsonAddress(json, ".sepoliaAIArbiter.agent"), agent);
         assertEq(vm.parseJsonAddress(json, ".sepoliaAIArbiter.deployer"), deployer);
         assertEq(vm.parseJsonUint(json, ".sepoliaAIArbiter.challengeWindow"), 120);
+        assertEq(vm.parseJsonUint(json, ".sepoliaAIArbiter.fromBlock"), 9_300_000);
         assertEq(vm.parseJsonAddress(json, ".sepolia.arbiter"), arb);
         assertEq(vm.parseJsonAddress(json, ".sepolia.rentEscrow"), makeAddr("escrow"));
         vm.removeFile(UPSERT_FILE);

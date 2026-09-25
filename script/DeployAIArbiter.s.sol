@@ -69,6 +69,8 @@ contract DeployAIArbiter is Script {
         vm.serializeAddress(key, "human", human);
         vm.serializeAddress(key, "agent", agent);
         vm.serializeUint(key, "challengeWindow", challengeWindow);
+        // A block at or before the deploy: where judge/ starts scanning for Evidence / DisputeOpened.
+        vm.serializeUint(key, "fromBlock", block.number);
         string memory json = vm.serializeAddress(key, "aiArbiter", aiArbiter);
         if (!vm.exists(path)) vm.writeFile(path, "{}");
         vm.writeJson(json, path, string.concat(".", RECORD_KEY)); // read-modify-write of this one key
