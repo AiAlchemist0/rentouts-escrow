@@ -1,0 +1,10 @@
+{
+  "chainId": 11155111,
+  "ensDeployment": "sepolia-deployment-2026-09-15",
+  "ensParentName": "rentouts.eth",
+  "issuer": "0xF6048B190D178Fb6F0870c65CD2F7E06381713C4",
+  "permissionedResolver": "0xBB8A105f48Ac836F549eC0B6A1a45BB7BA0961E5",
+  "rentoutsSubnames": "0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60",
+  "universalResolver": "0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe",
+  "userRegistry": "0xD2D122000D4725a863376EcAe4220BC20590f382"
+}
