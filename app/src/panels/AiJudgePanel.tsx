@@ -339,7 +339,7 @@ export function AiJudgePanel({ lease, account, info, now, nameOf }: Props) {
             record.proposal?.summary ? (
               <blockquote className="judge-summary">{record.proposal.summary}</blockquote>
             ) : logs.isPending ? null : (
-              <p className="hint">The judge’s summary is in its Proposed event, which isn’t in the blocks this page scans.</p>
+              <p className="hint">The judge’s summary is in its Proposed event, which isn’t in the blocks this page has scanned so far.</p>
             )
           ) : null}
           {hadProposal ? (

@@ -175,12 +175,19 @@ describe('disputeLog', () => {
     expect(log.proposals).toBe(0)
   })
 
-  it('picks the proposal behind the current ruling hash, else the latest', () => {
+  it('picks the proposal behind the current ruling hash; without a hash, the latest', () => {
     const logs = [proposed(3n, 5000, hashA, 20n, 'first'), proposed(3n, 7500, hashB, 21n, 'replacement')]
     expect(disputeLog(logs, 3n).proposal).toMatchObject({ tenantBps: 7500, summary: 'replacement', agent })
     expect(disputeLog(logs, 3n, hashA).proposal).toMatchObject({ tenantBps: 5000, summary: 'first' })
     expect(disputeLog(logs, 3n, hashB).proposals).toBe(2)
-    expect(disputeLog(logs, 3n, `0x${'cc'.repeat(32)}`).proposal?.summary).toBe('replacement')
+    expect(disputeLog(logs, 3n, `0x${'cc'.repeat(32)}`).proposal).toBeUndefined()
+  })
+
+  it('never pairs a replacement ruling with the previous proposal’s summary while the logs catch up', () => {
+    // getRuling already holds P2 (hashB); the logs poll has only seen P1.
+    const stale = [proposed(3n, 5000, hashA, 20n, 'P1 rationale')]
+    expect(disputeLog(stale, 3n, hashB).proposal).toBeUndefined()
+    expect(disputeLog(stale, 3n, hashB).proposals).toBe(1)
   })
 
   it('records who appealed', () => {

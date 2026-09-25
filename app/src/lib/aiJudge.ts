@@ -144,7 +144,10 @@ export type ProposalRecord = {
 
 export type DisputeLog = {
   evidence: EvidenceItem[]
-  /** The Proposed event behind the current ruling (matched by rulingHash), else the latest one. */
+  /**
+   * The Proposed event behind the current ruling, matched by rulingHash. Without a hash, the latest one. With a
+   * hash and no match (the logs haven't caught up with a replacement proposal yet), none: never another proposal's.
+   */
   proposal?: ProposalRecord
   /** Proposed events for this lease; more than one means the agent replaced an open proposal. */
   proposals: number
@@ -187,8 +190,8 @@ export function disputeLog(logs: readonly ArbiterLog[], leaseId: bigint, rulingH
       appealedBy = log.args.by
     }
   }
-  const matching = rulingHash ? proposals.filter((p) => p.rulingHash === rulingHash).at(-1) : undefined
-  return { evidence, proposal: matching ?? proposals.at(-1), proposals: proposals.length, appealedBy }
+  const proposal = rulingHash ? proposals.filter((p) => p.rulingHash === rulingHash).at(-1) : proposals.at(-1)
+  return { evidence, proposal, proposals: proposals.length, appealedBy }
 }
 
 // ------------------------------------------------------------------ statements
