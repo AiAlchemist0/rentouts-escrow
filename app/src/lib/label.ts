@@ -1,3 +1,4 @@
+import { isAddress } from 'viem'
 import { normalize } from 'viem/ens'
 
 export type LabelCheck = { ok: true; label: string } | { ok: false; reason: string }
@@ -38,8 +39,11 @@ export function checkLabel(input: string): LabelCheck {
   return { ok: true, label }
 }
 
-/** True for input that should be resolved as an ENS name rather than parsed as an address. */
+/**
+ * True for input that should be resolved as an ENS name rather than parsed as an address. Decided by
+ * address shape, not by a "0x" prefix: `0xrent` is a valid label, so `0xrent.rentouts.eth` is a name.
+ */
 export function looksLikeEnsName(input: string): boolean {
   const v = input.trim()
-  return v.includes('.') && !v.startsWith('0x')
+  return v.includes('.') && !isAddress(v, { strict: false })
 }

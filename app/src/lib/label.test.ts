@@ -28,4 +28,10 @@ describe('looksLikeEnsName', () => {
     expect(looksLikeEnsName('0x484811c8c967809bE644A89d677933c29fb9e936')).toBe(false)
     expect(looksLikeEnsName('alice')).toBe(false)
   })
+
+  it('treats names whose label starts with 0x as names (0xrent is claimable)', () => {
+    expect(checkLabel('0xrent')).toEqual({ ok: true, label: '0xrent' })
+    expect(looksLikeEnsName('0xrent.rentouts.eth')).toBe(true)
+    expect(looksLikeEnsName('0x484811c8c967809be644a89d677933c29fb9e936')).toBe(false)
+  })
 })

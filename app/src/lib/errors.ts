@@ -53,7 +53,7 @@ export function describeError(name: string, args: readonly unknown[] = []): stri
       return 'Only a RentOuts issuer can do this.'
     // RentEscrow
     case 'InvalidTerms':
-      return 'The escrow rejected these terms. Check the amounts, the period length, the number of periods and the tenant address.'
+      return 'The escrow rejected these terms. Check the amounts, the period length, the number of periods and the tenant address. The arbiter can’t be the landlord or the tenant, and the tenant can’t be the landlord.'
     case 'InvalidState': {
       const state = STATE_LABELS[Number(args[1])] ?? 'in another state'
       return `${leaseRef(args)} is ${state.toLowerCase()}, so this action isn’t available.`

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { isAddressEqual, parseEventLogs } from 'viem'
+import { parseEventLogs } from 'viem'
 import { useReadContract } from 'wagmi'
 import { sepolia } from 'wagmi/chains'
 import { leaseShareAbi } from '../abi/leaseShare'
@@ -9,7 +9,7 @@ import { AddressLink, Field, Notice, NotConfigured, TxStatus } from '../componen
 import { LEASE_DEFAULTS } from '../config'
 import { useAddressInput, useContracts, useParentName, useRentoutsNames, useTx, useWallet, type ResolvedInput } from '../hooks'
 import { formatDuration, formatToken, parseToken, parseWhole } from '../lib/format'
-import { totalDue } from '../lib/lease'
+import { leasePartyProblem, totalDue } from '../lib/lease'
 
 const UINT16_MAX = 65_535
 const UINT32_MAX = 4_294_967_295
@@ -18,6 +18,7 @@ function TenantResolution({ resolved }: { resolved: ResolvedInput }) {
   const nameOf = useRentoutsNames(resolved.kind === 'address' ? [resolved.address] : [])
   switch (resolved.kind) {
     case 'empty':
+    case 'pending':
       return null
     case 'loading':
       return <p className="status status-hint">Resolving {resolved.name} through the ENS Universal Resolver…</p>
@@ -47,7 +48,7 @@ function TenantResolution({ resolved }: { resolved: ResolvedInput }) {
 }
 
 export function CreateLeasePanel() {
-  const { escrow, leaseShare, minPeriod, tokenDecimals, tokenSymbol, escrowError } = useContracts()
+  const { escrow, leaseShare, arbiter, minPeriod, tokenDecimals, tokenSymbol, escrowError } = useContracts()
   const { address, ready } = useWallet()
   const parent = useParentName()
   const [tenantInput, setTenantInput] = useState('')
@@ -75,11 +76,11 @@ export function CreateLeasePanel() {
   const periodSeconds = parseWhole(period, UINT32_MAX)
   const periodCount = parseWhole(periods, UINT16_MAX)
   const tooShort = periodSeconds !== null && minPeriod !== undefined && periodSeconds < minPeriod
-  const selfLease = !!tenant && !!address && isAddressEqual(tenant, address)
+  const partyError = leasePartyProblem(address, tenant, arbiter)
 
   const termsValid =
     depositUnits !== null && rentUnits !== null && rentUnits > 0n && periodSeconds !== null && periodCount !== null && !tooShort
-  const canSubmit = !!escrow && ready && !!tenant && termsValid && !selfLease && !tx.busy
+  const canSubmit = !!escrow && ready && !!tenant && termsValid && !partyError && !tx.busy
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
@@ -124,7 +125,7 @@ export function CreateLeasePanel() {
         />
       </Field>
       <TenantResolution resolved={resolved} />
-      {selfLease ? <p className="status status-bad">The tenant can’t be your own wallet.</p> : null}
+      {partyError ? <p className="status status-bad">{partyError}</p> : null}
 
       <div className="grid-2">
         <Field label={`Deposit (${tokenSymbol})`} htmlFor="deposit">

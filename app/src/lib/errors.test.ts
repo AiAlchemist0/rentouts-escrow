@@ -36,6 +36,10 @@ describe('describeError', () => {
     expect(describeError('InvalidState', [7n, 4])).toBe('Lease #7 is closed, so this action isn’t available.')
   })
 
+  it('mentions the party rules for InvalidTerms', () => {
+    expect(describeError('InvalidTerms')).toMatch(/arbiter can’t be the landlord or the tenant/)
+  })
+
   it('falls back to the error name', () => {
     expect(describeError('SomethingNew')).toBe('The contract reverted with SomethingNew.')
   })

@@ -2,7 +2,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useState } from 'react'
 import {
   getAddress,
-  isAddress,
   keccak256,
   toBytes,
   type Abi,
@@ -19,9 +18,9 @@ import { erc20Abi } from './abi/erc20'
 import { rentEscrowAbi } from './abi/rentEscrow'
 import { rentoutsSubnamesAbi } from './abi/rentoutsSubnames'
 import { CREDENTIAL_KEYS, ENS, ENV_CONTRACTS } from './config'
+import { parseAddressInput, resolveAddressInput, type ResolvedInput } from './lib/addressInput'
 import { labelUnder, type CredentialRecords } from './lib/credential'
 import { errorMessage } from './lib/errors'
-import { looksLikeEnsName } from './lib/label'
 import { recordTx } from './txLog'
 
 export function useSepoliaClient() {
@@ -321,41 +320,25 @@ export function useClaimTx(holder: Address | undefined) {
   })
 }
 
-export type ResolvedInput =
-  | { kind: 'empty' }
-  | { kind: 'loading'; name: string }
-  | { kind: 'address'; address: Address }
-  | { kind: 'name'; name: string; address: Address }
-  | { kind: 'error'; message: string }
+export type { ResolvedInput } from './lib/addressInput'
 
-/** An input that takes an ENS name (resolved via the Universal Resolver) or a raw 0x address. */
+/**
+ * An input that takes an ENS name (resolved via the Universal Resolver) or a raw 0x address. Names are
+ * looked up 350 ms after the last keystroke, and the result is `pending` until then (see resolveAddressInput).
+ */
 export function useAddressInput(input: string): ResolvedInput {
   const client = useSepoliaClient()
-  const value = useDebounced(input.trim(), 350)
-  let normalized: string | null = null
-  let invalid = false
-  if (looksLikeEnsName(value)) {
-    try {
-      normalized = normalize(value)
-    } catch {
-      invalid = true
-    }
-  }
+  const live = input.trim()
+  const value = useDebounced(live, 350)
+  const parsed = parseAddressInput(value)
+  const normalized = parsed.kind === 'name' ? parsed.name : null
   const lookup = useQuery({
     queryKey: ['resolve', normalized],
     enabled: !!normalized,
     staleTime: 30_000,
     queryFn: () => client.getEnsAddress({ name: normalized!, universalResolverAddress: ENS.universalResolver }),
   })
-
-  if (value === '') return { kind: 'empty' }
-  if (isAddress(value, { strict: false })) return { kind: 'address', address: getAddress(value) }
-  if (invalid) return { kind: 'error', message: 'That isn’t a valid ENS name.' }
-  if (!normalized) return { kind: 'error', message: 'Enter an ENS name (name.eth) or a 0x address.' }
-  if (lookup.isPending) return { kind: 'loading', name: normalized }
-  if (lookup.isError) return { kind: 'error', message: errorMessage(lookup.error) }
-  if (!lookup.data) return { kind: 'error', message: `${normalized} doesn’t resolve to an address.` }
-  return { kind: 'name', name: normalized, address: lookup.data }
+  return resolveAddressInput(live, value, lookup)
 }
 
 // ------------------------------------------------------------------ escrow

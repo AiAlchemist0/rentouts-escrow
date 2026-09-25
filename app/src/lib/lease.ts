@@ -1,3 +1,4 @@
+import { isAddressEqual, type Address } from 'viem'
 import { LeaseState } from '../abi/rentEscrow'
 
 export type LeaseTerms = {
@@ -41,4 +42,19 @@ export function leaseTiming(terms: LeaseTerms, now: number): LeaseTiming | null 
 /** deposit + rentPerPeriod * periods: what the tenant prepays in fundLease. */
 export function totalDue(deposit: bigint, rentPerPeriod: bigint, periods: number): bigint {
   return deposit + rentPerPeriod * BigInt(periods)
+}
+
+/**
+ * Why RentEscrow.createLease would refuse these parties, or null. The escrow reverts InvalidTerms when the
+ * tenant is the landlord or when the arbiter is either party, so the app says so before anything is sent.
+ */
+export function leasePartyProblem(
+  landlord: Address | undefined,
+  tenant: Address | undefined,
+  arbiter: Address | undefined,
+): string | null {
+  const same = (a: Address | undefined, b: Address | undefined) => !!a && !!b && isAddressEqual(a, b)
+  if (same(tenant, landlord)) return 'The tenant can’t be your own wallet.'
+  if (same(landlord, arbiter) || same(tenant, arbiter)) return 'The arbiter can’t be the landlord or the tenant of a lease.'
+  return null
 }

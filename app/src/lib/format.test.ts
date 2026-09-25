@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { formatCountdown, formatDuration, formatToken, parseToken, parseWhole, shortAddress } from './format'
-import { leaseTiming, totalDue } from './lease'
+import { leasePartyProblem, leaseTiming, totalDue } from './lease'
 
 describe('USDC formatting (6 decimals)', () => {
   it('formats token units', () => {
@@ -64,5 +64,27 @@ describe('lease timing', () => {
 
   it('totals deposit plus prepaid rent', () => {
     expect(totalDue(250_000n, 200_000n, 3)).toBe(850_000n)
+  })
+})
+
+describe('lease parties (RentEscrow.createLease InvalidTerms rules)', () => {
+  const landlord = '0x484811c8c967809bE644A89d677933c29fb9e936'
+  const tenant = '0xF6048B190D178Fb6F0870c65CD2F7E06381713C4'
+  const arbiter = '0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE'
+
+  it('accepts distinct landlord, tenant and arbiter', () => {
+    expect(leasePartyProblem(landlord, tenant, arbiter)).toBeNull()
+    expect(leasePartyProblem(landlord, undefined, arbiter)).toBeNull()
+    expect(leasePartyProblem(landlord, tenant, undefined)).toBeNull()
+  })
+
+  it('rejects a self-lease', () => {
+    expect(leasePartyProblem(landlord, landlord.toLowerCase() as `0x${string}`, arbiter)).toMatch(/own wallet/)
+  })
+
+  it('rejects the arbiter as landlord or tenant', () => {
+    expect(leasePartyProblem(arbiter, tenant, arbiter)).toMatch(/arbiter can’t be the landlord or the tenant/)
+    expect(leasePartyProblem(arbiter, undefined, arbiter)).toMatch(/arbiter/)
+    expect(leasePartyProblem(landlord, arbiter.toLowerCase() as `0x${string}`, arbiter)).toMatch(/arbiter/)
   })
 })
