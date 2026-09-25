@@ -47,7 +47,7 @@ which the ENS deploy script writes.
 | 1. Claim your name | tenant | `RentoutsSubnames.register(label, you)`. The label is checked with viem `normalize()` (ENSIP-15) plus the contract's own rule. Availability is a `simulateContract(register)`, so taken, retired and one-name-per-address all come back as readable messages. Once you hold a name, you see your credential card |
 | Credential card | anyone | `getEnsAddress` and `getEnsText` for `rentouts.credential`, `.status`, `.leasesCompleted`, `.disputes`, `.rentPaid`, `.depositReturnRate` and `.rating`, all through the ENSv2 Universal Resolver. Stats are shown only if `status == active` **and** the name resolves to the holder `RentoutsSubnames.holderOf(labelhash)` has on record. The card links to the ENS app, the claim transaction on Etherscan and the resolver. It also compares ENS with the escrow's `tenantStats` and offers a sync when ENS is behind. `?name=alice.rentouts.eth` opens a lookup directly |
 | 2. Create a lease | landlord | The tenant is entered as an **ENS name** (or a 0x address). The name is resolved live through the Universal Resolver, and the tenant's credential is shown before you sign. Amounts are in USDC (6 decimals). The defaults are a 120 s period and 3 periods. The app warns if the landlord isn't on the lease-share allowlist, which would make `createLease` revert |
-| 3. Fund the lease | tenant | Your USDC and ETH balances, then `approve` for the exact amount and `fundLease` |
+| 3. Fund the lease | tenant | Your USDC and ETH balances, then `approve` for the exact amount and `fundLease`. If `RentEscrow.humanGate()` is set, a “Human verification required (World ID — coming soon)” notice explains the gate. The app reads `isVerified(you)` and `verifier()` (open gate = everyone passes) and disables both buttons for a wallet the gate rejects. A `NotVerifiedHuman` revert reads as a sentence |
 | 4. Run the lease | both, arbiter | Every lease you're part of (or all of them), with its state, a per-period bar, a countdown to the next unlock, what's in escrow and what's claimable. Buttons: release rent (`claimRent`), `closeLease`, `openDispute` and `cancelLease`. The arbiter gets `resolveDispute` with a tenant-share slider. Closed leases offer `CredentialSync.sync(tenant)`, after which the card refetches |
 | 5. Lease shares | landlord | Curvegrid RWA: your `LeaseShare1155` balance per lease (token id = lease id) and a transfer form. The recipient can be an ENS name. The allowlist is checked before sending, and a `NotAllowlisted` revert is explained in plain words |
 
@@ -63,7 +63,7 @@ use `eth_getLogs` for leases, because public RPCs cap log ranges.
 ## Checks
 
 ```bash
-npm test               # vitest: label validation, USDC formatting, lease timing, error mapping, trust check
+npm test               # vitest: label validation, address input, USDC formatting, lease timing and parties, error mapping, trust check, human-gate notice
 npm run typecheck      # tsc --noEmit
 npm run build          # typecheck + vite build
 npm run ens:smoke      # live ENSv2 read on Sepolia, no wallet
@@ -87,7 +87,10 @@ as the arbiter, and a blocked share transfer. The escrow was the `feat/core-escr
 ## Honest limits
 
 - Testnet only. The money is Circle **test** USDC.
-- The arbiter is a single test account. In production it would be a Safe multisig.
+- The arbiter is a single test account. In production it would be a Safe multisig. The escrow refuses a lease
+  where the arbiter is the landlord or the tenant, and the app checks this before you sign.
+- World ID isn't integrated. The escrow has a human-gate seam (`humanGate()`); while its `HumanGate` has no
+  verifier, every wallet passes. The app can't verify anyone itself.
 - The ENS app (`sepolia.app.ens.domains`) may not display ENSv2 beta names yet. The Etherscan links and the
   in-app reads are the source of truth.
 - `CredentialSync` wasn't deployed when this was written. The app calls only `sync(address)` and shows

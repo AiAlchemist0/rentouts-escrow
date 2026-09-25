@@ -68,7 +68,7 @@ function RecentTxs() {
 }
 
 function Footer() {
-  const { escrow, token, leaseShare, credentialSync, arbiter, tokenSymbol } = useContracts()
+  const { escrow, token, leaseShare, credentialSync, arbiter, humanGate, tokenSymbol } = useContracts()
   return (
     <footer className="footer">
       <div className="wrap">
@@ -77,6 +77,7 @@ function Footer() {
           <ContractRow name="RentEscrow" address={escrow} />
           <ContractRow name={`Token (${tokenSymbol})`} address={token} />
           <ContractRow name="Arbiter" address={arbiter} note={arbiter ? '(test account; a Safe in production)' : undefined} />
+          {humanGate ? <ContractRow name="HumanGate" address={humanGate} note="(who may fund a lease; World ID coming soon)" /> : null}
           <ContractRow name="LeaseShare1155" address={leaseShare} />
           <ContractRow name="CredentialSync" address={credentialSync} />
           <ContractRow name="RentoutsSubnames" address={ENS.subnames} />

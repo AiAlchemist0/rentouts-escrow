@@ -4,11 +4,23 @@ import { sepolia } from 'wagmi/chains'
 import { erc20Abi } from '../abi/erc20'
 import { LeaseState, rentEscrowAbi } from '../abi/rentEscrow'
 import { AddressLink, Empty, ExtLink, NotConfigured, Notice, TxStatus } from '../components/ui'
-import { useContracts, useLeases, useRentoutsName, useRentoutsNames, useTx, useWallet, type LeaseRow } from '../hooks'
+import { useContracts, useHumanGate, useLeases, useRentoutsName, useRentoutsNames, useTx, useWallet, type LeaseRow } from '../hooks'
 import { formatDuration, formatToken } from '../lib/format'
+import { humanGateNotice } from '../lib/humanGate'
 import { totalDue } from '../lib/lease'
 
-function FundRow({ lease, account, balance }: { lease: LeaseRow; account: Address; balance: bigint | undefined }) {
+function FundRow({
+  lease,
+  account,
+  balance,
+  gated,
+}: {
+  lease: LeaseRow
+  account: Address
+  balance: bigint | undefined
+  /** The escrow's human gate rejects this wallet, so fundLease would revert. */
+  gated: boolean
+}) {
   const { escrow, token, tokenDecimals, tokenSymbol } = useContracts()
   const nameOf = useRentoutsNames([lease.landlord])
   const approveTx = useTx()
@@ -42,7 +54,7 @@ function FundRow({ lease, account, balance }: { lease: LeaseRow; account: Addres
         <button
           type="button"
           className="btn"
-          disabled={approved || approveTx.busy || !escrow}
+          disabled={approved || approveTx.busy || !escrow || gated}
           onClick={() =>
             approveTx.run({ address: token, abi: erc20Abi, functionName: 'approve', args: [escrow!, due] }, `Approve ${amount} for lease #${lease.id}`)
           }
@@ -52,7 +64,7 @@ function FundRow({ lease, account, balance }: { lease: LeaseRow; account: Addres
         <button
           type="button"
           className="btn btn-primary"
-          disabled={!approved || !enough || fundTx.busy}
+          disabled={!approved || !enough || fundTx.busy || gated}
           onClick={() =>
             fundTx.run({ address: escrow!, abi: rentEscrowAbi, functionName: 'fundLease', args: [lease.id] }, `Fund lease #${lease.id}`)
           }
@@ -83,6 +95,7 @@ export function FundPanel() {
     query: { enabled: !!address },
   })
   const { data: eth } = useBalance({ address, chainId: sepolia.id })
+  const gate = humanGateNotice(useHumanGate(address))
 
   const mine = (leases.data ?? []).filter((l) => address && l.tenant.toLowerCase() === address.toLowerCase())
   const waiting = mine.filter((l) => l.state === LeaseState.CREATED)
@@ -117,6 +130,11 @@ export function FundPanel() {
       </p>
 
       {escrowError ? <Notice tone="error">{escrowError}</Notice> : null}
+      {gate ? (
+        <Notice tone={gate.tone}>
+          <strong>{gate.title}</strong>. {gate.detail}
+        </Notice>
+      ) : null}
       {!escrow ? (
         <NotConfigured what="The escrow" envVar="VITE_ESCROW_ADDRESS" />
       ) : !address ? null : leases.isPending ? (
@@ -136,7 +154,7 @@ export function FundPanel() {
       ) : (
         <ul className="list">
           {waiting.map((lease) => (
-            <FundRow key={String(lease.id)} lease={lease} account={address} balance={balance} />
+            <FundRow key={String(lease.id)} lease={lease} account={address} balance={balance} gated={!!gate?.blocksFunding} />
           ))}
         </ul>
       )}

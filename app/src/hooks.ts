@@ -4,6 +4,7 @@ import {
   getAddress,
   keccak256,
   toBytes,
+  zeroAddress,
   type Abi,
   type Address,
   type ContractFunctionArgs,
@@ -15,12 +16,14 @@ import { normalize } from 'viem/ens'
 import { useAccount, usePublicClient, useReadContract, useWriteContract } from 'wagmi'
 import { sepolia } from 'wagmi/chains'
 import { erc20Abi } from './abi/erc20'
+import { humanGateAbi } from './abi/humanGate'
 import { rentEscrowAbi } from './abi/rentEscrow'
 import { rentoutsSubnamesAbi } from './abi/rentoutsSubnames'
 import { CREDENTIAL_KEYS, ENS, ENV_CONTRACTS } from './config'
 import { parseAddressInput, resolveAddressInput, type ResolvedInput } from './lib/addressInput'
 import { labelUnder, type CredentialRecords } from './lib/credential'
 import { errorMessage } from './lib/errors'
+import type { HumanGateView } from './lib/humanGate'
 import { recordTx } from './txLog'
 
 export function useSepoliaClient() {
@@ -62,6 +65,8 @@ export type AppContracts = {
   leaseShare?: Address
   credentialSync?: Address
   arbiter?: Address
+  /** RentEscrow.humanGate(), checked in fundLease. undefined = funding not gated (or not read yet). */
+  humanGate?: Address
   minPeriod?: number
   sharesPerLease?: bigint
   tokenDecimals: number
@@ -72,7 +77,7 @@ export type AppContracts = {
 
 /**
  * Env addresses, upgraded with what the escrow itself reports: when RentEscrow is configured, its
- * token() and leaseShare() are the source of truth.
+ * token() and leaseShare() are the source of truth, and humanGate() comes only from the escrow.
  */
 export function useContracts(): AppContracts {
   const client = useSepoliaClient()
@@ -85,23 +90,22 @@ export function useContracts(): AppContracts {
     retry: 2,
     queryFn: async () => {
       const at = { address: escrow!, abi: rentEscrowAbi } as const
-      const [token, leaseShare, arbiter, minPeriod, sharesPerLease] = await Promise.all([
+      const [token, leaseShare, arbiter, humanGate, minPeriod, sharesPerLease] = await Promise.all([
         client.readContract({ ...at, functionName: 'token' }),
         client.readContract({ ...at, functionName: 'leaseShare' }),
         client.readContract({ ...at, functionName: 'arbiter' }),
+        client.readContract({ ...at, functionName: 'humanGate' }),
         client.readContract({ ...at, functionName: 'MIN_PERIOD' }),
         client.readContract({ ...at, functionName: 'SHARES_PER_LEASE' }),
       ])
-      return { token, leaseShare, arbiter, minPeriod, sharesPerLease }
+      return { token, leaseShare, arbiter, humanGate, minPeriod, sharesPerLease }
     },
   })
 
   const onChain = escrowConfig.data
   const token = onChain?.token ?? ENV_CONTRACTS.token
-  const leaseShare =
-    onChain && onChain.leaseShare !== '0x0000000000000000000000000000000000000000'
-      ? onChain.leaseShare
-      : ENV_CONTRACTS.leaseShare
+  const leaseShare = onChain && onChain.leaseShare !== zeroAddress ? onChain.leaseShare : ENV_CONTRACTS.leaseShare
+  const humanGate = onChain && onChain.humanGate !== zeroAddress ? onChain.humanGate : undefined
 
   const tokenMeta = useQuery({
     queryKey: ['token-meta', token],
@@ -121,6 +125,7 @@ export function useContracts(): AppContracts {
     leaseShare,
     credentialSync: ENV_CONTRACTS.credentialSync,
     arbiter: onChain?.arbiter,
+    humanGate,
     minPeriod: onChain?.minPeriod,
     sharesPerLease: onChain?.sharesPerLease,
     tokenDecimals: tokenMeta.data?.decimals ?? 6,
@@ -342,6 +347,35 @@ export function useAddressInput(input: string): ResolvedInput {
 }
 
 // ------------------------------------------------------------------ escrow
+
+/**
+ * The escrow's human gate as it applies to `account`: isVerified(account), and whether HumanGate is open
+ * (verifier() == address(0), everyone passes). Both are undefined until read, or if the read fails.
+ */
+export function useHumanGate(account: Address | undefined): HumanGateView {
+  const { humanGate } = useContracts()
+  const verified = useReadContract({
+    address: humanGate,
+    abi: humanGateAbi,
+    functionName: 'isVerified',
+    args: account ? [account] : undefined,
+    chainId: sepolia.id,
+    query: { enabled: !!humanGate && !!account },
+  })
+  const verifier = useReadContract({
+    address: humanGate,
+    abi: humanGateAbi,
+    functionName: 'verifier',
+    chainId: sepolia.id,
+    // Any IHumanGate may sit here; only HumanGate has verifier().
+    query: { enabled: !!humanGate, retry: false },
+  })
+  return {
+    gate: humanGate,
+    verified: humanGate && account ? verified.data : undefined,
+    open: humanGate && verifier.data !== undefined ? verifier.data === zeroAddress : undefined,
+  }
+}
 
 export type LeaseRow = {
   id: bigint

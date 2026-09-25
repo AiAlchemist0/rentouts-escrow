@@ -72,6 +72,8 @@ export function describeError(name: string, args: readonly unknown[] = []): stri
       return 'The lease term isn’t over yet. Other accounts can close it one period after the term ends.'
     case 'InvalidBps':
       return 'The tenant’s share must be between 0% and 100%.'
+    case 'NotVerifiedHuman':
+      return `${args[0] ? shortAddress(String(args[0])) : 'This wallet'} hasn’t passed the escrow’s human verification (World ID — coming soon), so it can’t fund a lease.`
     // LeaseShare1155
     case 'NotAllowlisted':
       return `${args[0] ? shortAddress(String(args[0])) : 'This address'} isn’t on the lease-share compliance allowlist, so it can’t hold lease shares.`

@@ -3,6 +3,7 @@ import { parseAbi } from 'viem'
 /**
  * RentEscrow, transcribed from rentouts-escrow-core/src/interfaces/IRentEscrow.sol (branch feat/core-escrow).
  * Solidity enums are uint8 on the ABI: State = NONE, CREATED, ACTIVE, DISPUTED, CLOSED, CANCELLED.
+ * humanGate() is the optional IHumanGate that fundLease consults (address(0) = funding not gated).
  */
 export const rentEscrowAbi = parseAbi([
   'struct Lease { address landlord; address tenant; uint128 deposit; uint128 rentPerPeriod; uint32 periodSeconds; uint16 periods; uint16 periodsClaimed; uint64 startTime; uint8 state; }',
@@ -25,10 +26,12 @@ export const rentEscrowAbi = parseAbi([
   'error NothingToClaim(uint256 leaseId)',
   'error TermNotOver(uint256 leaseId)',
   'error InvalidBps(uint16 bps)',
+  'error NotVerifiedHuman(address account)',
 
   'function token() view returns (address)',
   'function arbiter() view returns (address)',
   'function leaseShare() view returns (address)',
+  'function humanGate() view returns (address)',
   'function SHARES_PER_LEASE() view returns (uint256)',
   'function MIN_PERIOD() view returns (uint32)',
 

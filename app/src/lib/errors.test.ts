@@ -40,6 +40,13 @@ describe('describeError', () => {
     expect(describeError('InvalidTerms')).toMatch(/arbiter can’t be the landlord or the tenant/)
   })
 
+  it('explains the human gate for NotVerifiedHuman', () => {
+    expect(describeError('NotVerifiedHuman', [alice])).toBe(
+      '0x4848…e936 hasn’t passed the escrow’s human verification (World ID — coming soon), so it can’t fund a lease.',
+    )
+    expect(describeError('NotVerifiedHuman')).toMatch(/^This wallet hasn’t passed/)
+  })
+
   it('falls back to the error name', () => {
     expect(describeError('SomethingNew')).toBe('The contract reverted with SomethingNew.')
   })
@@ -54,6 +61,13 @@ describe('errorMessage', () => {
   it('decodes an error bubbled up from another contract (LeaseShare1155 via the escrow)', () => {
     const data = encodeErrorResult({ abi: leaseShareAbi, errorName: 'NotAllowlisted', args: [alice] })
     expect(errorMessage(revert(rentEscrowAbi, 'createLease', data))).toMatch(/^0x4848…e936 isn’t on the lease-share compliance allowlist/)
+  })
+
+  it('decodes a NotVerifiedHuman revert from fundLease', () => {
+    const data = encodeErrorResult({ abi: rentEscrowAbi, errorName: 'NotVerifiedHuman', args: [alice] })
+    expect(errorMessage(revert(rentEscrowAbi, 'fundLease', data))).toMatch(/^0x4848…e936 hasn’t passed the escrow’s human verification/)
+    // Also when the revert surfaces through a call whose ABI doesn't list it (decoded against knownErrorsAbi).
+    expect(errorMessage(revert(rentoutsSubnamesAbi, 'register', data))).toMatch(/World ID — coming soon/)
   })
 
   it('passes through require() reasons', () => {
