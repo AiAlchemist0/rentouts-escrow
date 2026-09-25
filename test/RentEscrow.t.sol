@@ -343,7 +343,7 @@ contract RentEscrowTest is Test {
 
     function test_ClaimRent_PartialPeriodsRoundDownThenCatchUp() public {
         uint256 id = _createAndFund();
-        uint256 start = block.timestamp;
+        uint256 start = escrow.getLease(id).startTime;
 
         vm.warp(start + PERIOD + PERIOD / 2); // 1.5 periods
         (uint16 n,) = escrow.claimable(id);
@@ -393,7 +393,7 @@ contract RentEscrowTest is Test {
 
     function testFuzz_Claimable_MatchesElapsedPeriods(uint256 dt, uint256 claimAt) public {
         uint256 id = _createAndFund();
-        uint256 start = block.timestamp;
+        uint256 start = escrow.getLease(id).startTime;
         dt = bound(dt, 0, (uint256(PERIODS) + 3) * PERIOD);
         claimAt = bound(claimAt, 0, dt);
 
