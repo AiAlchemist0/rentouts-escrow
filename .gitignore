@@ -2,6 +2,8 @@
 out/
 cache/
 broadcast/
+# ens/ commits its Sepolia broadcast receipts as deployment proof (ens/.gitignore drops dry-runs)
+!ens/broadcast/
 lib/
 
 # Env / secrets

@@ -99,6 +99,12 @@ Running, timestamped log of the ENS track (owner: Bektur), updated as we go. Tim
 - Live dry-run of `subnames` on Sepolia simulates exactly 3 `revokeRoles` txs and nothing else. **Not broadcast yet.**
 - The README no longer claims no RentOuts server can affect the derived values. Any `RentoutsSubnames` issuer can still `setCredential` them until it is removed; `sync` restores them.
 
+## Sat 2026-09-26
+
+**00:46 — `ens-integration` rebased onto `origin/main` (`a4ef88a`, Dean's `LeaseShare1155` + ARCHITECTURE).** Clean rebase, no conflicts; Dean's files are unchanged.
+- `ens/src/interfaces/IRentEscrow.sol` is again a verbatim copy of the core interface, which now has `humanGate()` and `NotVerifiedHuman` (World ID seam). `CredentialSync` only reads `tenantStats`, so nothing else changed. `forge test` in `ens/`: 30/30 pass against live Sepolia.
+- Root `README.md`: short "ENS identity" section pointing to `ens/README.md`. Root `.gitignore`: `!ens/broadcast/`, because Dean's `broadcast/` rule would otherwise hide new ENS broadcast receipts (dry-runs stay ignored).
+
 ---
 
 ## Open items
