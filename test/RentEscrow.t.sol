@@ -161,6 +161,24 @@ contract RentEscrowTest is Test {
         assertEq(escrow.nextLeaseId(), 1);
     }
 
+    function test_CreateLease_ArbiterCanNeverBeAParty() public {
+        // As landlord the arbiter could dispute at move-in and rule the whole escrow to itself, so it
+        // cannot list even when it is on the share allowlist...
+        vm.prank(issuer);
+        shares.setAllowlist(arbiter, true);
+        vm.prank(arbiter);
+        vm.expectRevert(IRentEscrow.InvalidTerms.selector);
+        escrow.createLease(tenant, DEPOSIT, RENT, PERIOD, PERIODS);
+
+        // ...and as tenant it could rule all of its rent back to itself.
+        vm.prank(landlord);
+        vm.expectRevert(IRentEscrow.InvalidTerms.selector);
+        escrow.createLease(arbiter, DEPOSIT, RENT, PERIOD, PERIODS);
+
+        assertEq(escrow.nextLeaseId(), 1);
+        assertEq(shares.totalSupply(1), 0);
+    }
+
     function test_CreateLease_AcceptsEdgeTerms() public {
         vm.startPrank(landlord);
         uint256 minPeriod = escrow.createLease(tenant, DEPOSIT, RENT, 60, 1);

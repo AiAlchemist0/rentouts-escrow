@@ -14,8 +14,9 @@ import {LeaseShare1155} from "./LeaseShare1155.sol";
 ///         remaining escrow between the two parties. See {IRentEscrow} for the lifecycle and the
 ///         invariants (INV-1..INV-4) exercised by test/RentEscrow.invariant.t.sol.
 /// @dev    No owner, no admin, no fees, no upgradeability: token, arbiter and leaseShare are
-///         immutable. The only party-independent role is the arbiter, and it can only split a
-///         disputed lease's own escrow between that lease's tenant and landlord.
+///         immutable. The only party-independent role is the arbiter: it can never be a lease's
+///         landlord or tenant, and it can only split a disputed lease's own escrow between that
+///         lease's tenant and landlord.
 ///         The token must be a plain ERC-20 (no fee-on-transfer / rebasing), e.g. Circle USDC.
 ///         Built for ETHGlobal Tokyo 2026 (Ethereum Sepolia).
 contract RentEscrow is IRentEscrow, ReentrancyGuard {
@@ -93,7 +94,9 @@ contract RentEscrow is IRentEscrow, ReentrancyGuard {
     // ------------------------------------------------------------------ actions
 
     /// @inheritdoc IRentEscrow
-    /// @dev If lease shares are enabled, mints SHARES_PER_LEASE shares of tokenId == leaseId to the
+    /// @dev Reverts InvalidTerms if the arbiter would be the landlord or the tenant: an arbiter that
+    ///      is also a party could open a dispute and rule the whole escrow to itself.
+    ///      If lease shares are enabled, mints SHARES_PER_LEASE shares of tokenId == leaseId to the
     ///      landlord. LeaseShare1155 only lets allowlisted addresses receive shares, so a landlord
     ///      who is not on the compliance allowlist cannot list (the whole call reverts).
     function createLease(address tenant, uint128 deposit, uint128 rentPerPeriod, uint32 periodSeconds, uint16 periods)
@@ -103,8 +106,9 @@ contract RentEscrow is IRentEscrow, ReentrancyGuard {
     {
         uint256 total = uint256(deposit) + uint256(rentPerPeriod) * periods;
         if (
-            tenant == address(0) || tenant == msg.sender || uint256(deposit) + rentPerPeriod == 0 || periods == 0
-                || periodSeconds < MIN_PERIOD || total > type(uint128).max
+            tenant == address(0) || tenant == msg.sender || msg.sender == arbiter || tenant == arbiter
+                || uint256(deposit) + rentPerPeriod == 0 || periods == 0 || periodSeconds < MIN_PERIOD
+                || total > type(uint128).max
         ) revert InvalidTerms();
 
         leaseId = nextLeaseId++;

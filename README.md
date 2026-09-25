@@ -13,8 +13,9 @@
 | `script/DeployLeaseShare.s.sol` | Base Sepolia deploy script |
 | `src/RentEscrow.sol` | **Rental escrow** — holds the tenant's USDC deposit + prepaid rent, releases rent per period, returns the deposit; arbiter-split disputes |
 | `src/interfaces/IRentEscrow.sol` | Pinned escrow interface (lifecycle, events, errors, invariants) shared with the app and the ENS credential sync |
-| `test/RentEscrow.t.sol`, `test/RentEscrow.invariant.t.sol` | 42 unit/fuzz tests + a handler-based invariant suite (INV-1..INV-4) |
+| `test/RentEscrow.t.sol`, `test/RentEscrow.invariant.t.sol` | 43 unit/fuzz tests + a handler-based invariant suite (INV-1..INV-4) |
 | `script/DeployEscrow.s.sol` | Ethereum Sepolia deploy of RentEscrow + LeaseShare1155 (keystore signing) → `deployments/sepolia.json` |
+| `test/DeployEscrow.t.sol` | 4 tests of the deploy script's config checks and wiring |
 | `deployments.json` | Live contract addresses |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Design + diagrams for the deployed contract |
 
@@ -24,7 +25,7 @@ _ENS identity (`RentoutsSubnames` on ENSv2, Ethereum Sepolia) lives on the `ens-
 
 ## 🔐 RentEscrow — non-custodial USDC rental escrow (Ethereum Sepolia)
 
-**One-sentence summary:** a smart contract — not RentOuts, not the landlord — holds the tenant's deposit and prepaid rent in USDC, pays the landlord one period at a time, returns the deposit at the end, and lets a fixed arbiter do exactly one thing: split a disputed lease's own escrow between its tenant and landlord.
+**One-sentence summary:** a smart contract — not RentOuts, not the landlord — holds the tenant's deposit and prepaid rent in USDC, pays the landlord one period at a time, returns the deposit at the end, and lets a fixed arbiter, which can never be a lease's landlord or tenant, do exactly one thing: split a disputed lease's own escrow between its tenant and landlord.
 
 `src/RentEscrow.sol` implements [`src/interfaces/IRentEscrow.sol`](./src/interfaces/IRentEscrow.sol). Constructor `(token, arbiter, leaseShare)`, all immutable. No owner, no admin, no fees, no upgradeability. OpenZeppelin v5.1 `SafeERC20` + `ReentrancyGuard`, checks-effects-interactions throughout.
 
@@ -32,7 +33,7 @@ _ENS identity (`RentoutsSubnames` on ENSv2, Ethereum Sepolia) lives on the `ens-
 
 | Call | Who | Effect |
 | --- | --- | --- |
-| `createLease(tenant, deposit, rentPerPeriod, periodSeconds, periods)` | landlord | → `CREATED`, ids start at 1. Mints **100 `LeaseShare1155` shares** (`tokenId == leaseId`) to the landlord, so a landlord outside the compliance allowlist **cannot list** (the call reverts) |
+| `createLease(tenant, deposit, rentPerPeriod, periodSeconds, periods)` | landlord (never the arbiter) | → `CREATED`, ids start at 1; reverts `InvalidTerms` if the arbiter is the landlord or the tenant. Mints **100 `LeaseShare1155` shares** (`tokenId == leaseId`) to the landlord, so a landlord outside the compliance allowlist **cannot list** (the call reverts) |
 | `cancelLease(id)` | landlord | `CREATED` → `CANCELLED` (no funds involved) |
 | `fundLease(id)` | tenant | pulls `deposit + rentPerPeriod × periods` (after a USDC `approve`); `CREATED` → `ACTIVE`, the clock starts |
 | `claimRent(id)` | anyone | releases every elapsed, unclaimed period to the landlord (only ever to the landlord) |
@@ -56,7 +57,8 @@ A handler runs random create / fund / warp / claim / close / dispute / resolve /
 ### Test
 
 ```bash
-forge test --match-path 'test/RentEscrow*' -vv   # 42 unit/fuzz tests + 4 invariants, ~2 s
+forge test --match-path 'test/RentEscrow*' -vv   # 43 unit/fuzz tests + 4 invariants, ~2 s
+forge test --match-path test/DeployEscrow.t.sol   # 4 deploy-script tests
 ```
 
 Unit tests cover every function and exact custom-error revert, partial / complete claims with `vm.warp`, the close grace rule, cancel, 0 / 5000 / 10000 bps splits (plus a fuzzed split), share minting and the non-allowlisted-landlord revert, re-entry through the ERC-1155 receive hook, and tenant-stats accounting.
@@ -66,7 +68,7 @@ Unit tests cover every function and exact custom-error revert, partial / complet
 ```bash
 cast wallet import rentouts-deployer --interactive   # once: encrypted Foundry keystore, no PRIVATE_KEY in env
 export SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
-export ESCROW_ARBITER=0x...                          # required
+export ESCROW_ARBITER=0x...                          # required: a separate EOA, never the deployer or a demo landlord/tenant
 # optional: ESCROW_TOKEN (default: Circle test USDC 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238),
 #           LEASE_SHARE (an existing LeaseShare1155 the deployer owns; default: deploy a new one)
 
@@ -78,7 +80,7 @@ BROADCAST=true forge script script/DeployEscrow.s.sol --rpc-url sepolia \
   --account rentouts-deployer --sender <deployer> --broadcast
 ```
 
-The script makes the escrow the `LeaseShare1155` minter and allowlists the deployer. Every other landlord has to be allowlisted by the share owner before they can list: `cast send <leaseShare1155> "setAllowlist(address,bool)" <landlord> true --account rentouts-deployer --rpc-url sepolia`. The dry run simulates at ~3.9M gas (≈0.0085 ETH at ~1 gwei), which the ETHGlobal faucet's 0.05 Sepolia ETH covers.
+The script makes the escrow the `LeaseShare1155` minter and allowlists the deployer as the demo landlord, so it refuses an `ESCROW_ARBITER` equal to the deployer (an arbiter that is also a party could open a dispute and rule the whole escrow to itself; `RentEscrow` rejects such leases anyway). Every other landlord has to be allowlisted by the share owner before they can list: `cast send <leaseShare1155> "setAllowlist(address,bool)" <landlord> true --account rentouts-deployer --rpc-url sepolia`. The dry run simulates at ~3.9M gas (≈0.0085 ETH at ~1 gwei), which the ETHGlobal faucet's 0.05 Sepolia ETH covers.
 
 **Demo amounts:** the ETHGlobal faucet hands out 1 USDC on Sepolia per claim, so keep demo leases small. For example, `createLease(tenant, 300000, 100000, 60, 3)` escrows a 0.30 USDC deposit + 3 × 0.10 USDC rent at 60-second periods (0.60 USDC total).
 
@@ -87,7 +89,7 @@ The script makes the escrow the `LeaseShare1155` minter and allowlists the deplo
 ### Honest limits
 
 - Testnet only: Ethereum Sepolia with **Circle's test USDC**. Hackathon code, not audited.
-- The arbiter is a **single EOA** for the hackathon (a Safe multisig in production). It can never send funds outside the lease's two parties, but it decides the split, and a disputed lease stays frozen until it rules.
+- The arbiter is a **single EOA** for the hackathon (a Safe multisig in production). It can never be a lease's landlord or tenant and never send funds outside the lease's two parties, but it decides the split, and a disputed lease stays frozen until it rules.
 - Lease shares minted at `createLease` stay with the landlord if the lease is cancelled (`LeaseShare1155` has no burn).
 - The token must be a plain ERC-20 (no fee-on-transfer or rebasing), which USDC is. With shares enabled, a contract landlord must implement `onERC1155Received`.
 
