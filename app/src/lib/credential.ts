@@ -50,3 +50,40 @@ export function labelUnder(name: string, parent: string): string | null {
 export function labelId(label: string): bigint {
   return BigInt(keccak256(stringToBytes(label)))
 }
+
+/** The RentEscrow.tenantStats fields CredentialSync.sync turns into records. */
+export type SyncedStats = {
+  leasesCompleted: number
+  leasesDisputed: number
+  rentPaid: bigint
+  depositsPosted: bigint
+  depositsReturned: bigint
+}
+
+type SyncedKey = 'rentouts.leasesCompleted' | 'rentouts.disputes' | 'rentouts.rentPaid' | 'rentouts.depositReturnRate'
+
+/** The records CredentialSync.sync(tenant) writes for these stats, formatted exactly as it does. */
+export function syncedRecords(stats: SyncedStats): Record<SyncedKey, string> {
+  // CredentialSync._usdc: 6-decimal USDC as "whole.cc", truncated to cents.
+  const cents = (stats.rentPaid % 1_000_000n) / 10_000n
+  // CredentialSync._rate: whole percent returned, rounded down, capped at 100; "n/a" before any deposit.
+  const rate =
+    stats.depositsPosted === 0n ? 'n/a' : String(Math.min(100, Number((stats.depositsReturned * 100n) / stats.depositsPosted)))
+  return {
+    'rentouts.leasesCompleted': String(stats.leasesCompleted),
+    'rentouts.disputes': String(stats.leasesDisputed),
+    'rentouts.rentPaid': `${stats.rentPaid / 1_000_000n}.${String(cents).padStart(2, '0')}`,
+    'rentouts.depositReturnRate': rate,
+  }
+}
+
+const NO_HISTORY = syncedRecords({ leasesCompleted: 0, leasesDisputed: 0, rentPaid: 0n, depositsPosted: 0n, depositsReturned: 0n })
+
+/**
+ * The escrow-derived records that a sync would change right now. A record that was never written counts as
+ * an empty history. Rent claims and dispute resolutions move rentPaid and the deposit rate on their own.
+ */
+export function staleCredentialKeys(records: Partial<Record<CredentialKey, string | null>>, stats: SyncedStats): SyncedKey[] {
+  const now = syncedRecords(stats)
+  return (Object.keys(now) as SyncedKey[]).filter((key) => (records[key] ?? NO_HISTORY[key]) !== now[key])
+}

@@ -5,7 +5,7 @@ import { credentialSyncAbi } from '../abi/credentialSync'
 import { rentEscrowAbi } from '../abi/rentEscrow'
 import { ENS, type CredentialKey } from '../config'
 import { useClaimTx, useContracts, useCredential, useTx } from '../hooks'
-import { evaluateCredential, formatRecord } from '../lib/credential'
+import { evaluateCredential, formatRecord, staleCredentialKeys } from '../lib/credential'
 import { errorMessage } from '../lib/errors'
 import { addressUrl, ensAppUrl, formatToken, shortAddress, txUrl } from '../lib/format'
 import { AddressLink, ExtLink, Notice, TxStatus } from './ui'
@@ -57,9 +57,8 @@ function EscrowComparison({ holder, records }: { holder: Address; records: Recor
     query: { enabled: !!escrow },
   })
   if (!escrow || !stats) return null
-  const behind =
-    (records['rentouts.leasesCompleted'] ?? '0') !== String(stats.leasesCompleted) ||
-    (records['rentouts.disputes'] ?? '0') !== String(stats.leasesDisputed)
+  // Every record CredentialSync writes: a rent claim or a dispute resolution changes only rentPaid / the deposit rate.
+  const behind = staleCredentialKeys(records, stats).length > 0
   return (
     <div className="pass-escrow">
       <p>
