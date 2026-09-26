@@ -114,7 +114,7 @@ Done bars come from commit times and [`docs/ens/LOG.md`](./ens/LOG.md). The othe
 
 | Target | What | Owner |
 |---|---|---|
-| Sat morning | **World integration:** a World ID verifier contract that implements `isVerified(address)`, then `HumanGate.setVerifier(worldVerifier)` on the live gate `0xFF68…3abd`, from the gate owner (the deployer). No escrow redeploy. | team |
+| Sat morning | **World integration** (done Sat 12:09 JST): `WorldIdV4Gate` (World ID 4.0, RP-signed `register`), then `HumanGate.setVerifier` on the live gate `0xFF68…3abd` from the gate owner ([`0x56b47b25…43e8ee`](https://sepolia.etherscan.io/tx/0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee)). No escrow redeploy. Alice is registered on the second gate `0x5Cb8…aABa` (`fund-lease-wallet`); the switch to it is one more `setVerifier`. | team |
 | Sat morning | **Live demo on Sepolia:** point the app at the live addresses ([DEMO pre-flight](./DEMO.md#pre-flight-t-30-min)) and run the whole demo once. It covers lease → fund → claim → close → sync, then dispute → evidence → `./run.sh --lease <id> --propose` (GLM 5.3) → challenge window → `execute`. Rehearse an appeal and a `resolveByHuman` override. | team |
 | Sat | Draft PRs, external reviews, fixes, merges (see §6) | team |
 | Sat | Optional: Etherscan verification (needs an `ETHERSCAN_API_KEY`); Sourcify and Blockscout are done | team |
@@ -138,7 +138,7 @@ flowchart LR
 2. **`DeployEscrow`** with `ESCROW_ARBITER` = the `AIArbiter` address. In one run it deploys `LeaseShare1155`, then `HumanGate` (owner = deployer, verifier `0` = open), then `RentEscrow`. It then makes the escrow the share minter and allowlists the deployer as the demo landlord. Recorded under `"sepolia"`.
 3. **`bindEscrow(rentEscrow)`**, sent once by the human arbiter. `AIArbiter` refuses an escrow whose arbiter is not itself.
 4. **`CredentialSync`** from `ens/` with `ESCROW_ADDRESS` = the escrow, which makes it a `RentoutsSubnames` issuer. Recorded in `ens/deployments/sepolia.json`. Also broadcast the issuer role cleanup.
-5. **World ID** whenever its verifier is ready: `HumanGate.setVerifier(worldVerifier)` from the deployer.
+5. **World ID** (done Sat 12:09 JST): `HumanGate.setVerifier(WorldIdV4Gate)` from the deployer.
 
 Every script dry-runs first. The root scripts record addresses only in a real `--broadcast`, and the ENS phases send nothing unless `BROADCAST=true`.
 
@@ -148,7 +148,7 @@ Every script dry-runs first. The root scripts record addresses only in a real `-
 |---|---|---|---|
 | **ENS** | ENSv2 subnames in our own `UserRegistry`. Soulbound through ENS roles, revocable with a record wipe, never expiring. A shared `PermissionedResolver` with **key-scoped** issuer roles (Enhanced Access Control). Reads only through the Universal Resolver. An ENSIP-19 default address record. A credential derived on-chain from the escrow. | [`ens/`](../ens/), the app's identity step | 🟢 live on Sepolia, including `CredentialSync` and the issuer role cleanup |
 | **Curvegrid: Best RWA Tokenization Project** | `LeaseShare1155`: ERC-1155 lease shares with compliance-aware transfer logic in `_update` (mint, single and batch). Minted to the allowlisted landlord at `createLease`, so listing is compliance-gated. | [`src/LeaseShare1155.sol`](../src/LeaseShare1155.sol) | 🟢 standalone on Base Sepolia; 🟢 integrated on Ethereum Sepolia (`0x9A9F…1E09`, minter = `RentEscrow`) |
-| **World** | `HumanGate` in `fundLease`: a verified-human check on who may fund a new lease, with a verifier that can be set or swapped without redeploying the escrow. The World ID verifier plugs in behind it. | [`src/HumanGate.sol`](../src/HumanGate.sol), `RentEscrow.fundLease`, the app's fund step | 🟢 `HumanGate` live on Sepolia (open); 🟡 World verifier next |
+| **World** | `HumanGate` in `fundLease`: a verified-human check on who may fund a new lease, with a verifier that can be set or swapped without redeploying the escrow. Its verifier is `WorldIdV4Gate` (World ID 4.0, live since Sat 12:09 JST). | [`src/HumanGate.sol`](../src/HumanGate.sol), `RentEscrow.fundLease`, the app's fund step | 🟢 `HumanGate` live on Sepolia (open); 🟡 World verifier next |
 | **Continuity** | RentOuts is a live product; everything in this repo was written during the event | [rentouts.co](https://rentouts.co) | n/a |
 
 ## 6. Review and merge process
@@ -166,7 +166,7 @@ flowchart LR
     M --> DEP["Deploy or redeploy from the merged commit<br/>record addresses in deployments JSON and docs"]
 ```
 
-**Branches** (Sat 01:30 JST):
+**Branches** (snapshot at Sat 01:30 JST; all of them were merged into `main` as PRs #3–#7 at Sat 03:35 JST, and World as PRs #9–#11):
 
 | Branch | Contents | State |
 |---|---|---|

@@ -155,6 +155,14 @@ Sourcify pages: `https://repo.sourcify.dev/11155111/<address>`. Etherscan needs 
 - A fresh clone of `main` is green: root forge 137/137 (incl. invariants INV-1…4, AI-1…3), ens fork tests 42/42 against live Sepolia, judge 92/92, app 94/94 + production build, `app/scripts/live-smoke.mjs` all wiring checks passed with no local env, and ENS live read OK.
 - Still open: Etherscan verification (needs an API key; Sourcify + Blockscout are exact-match), the first live demo lease + `CredentialSync.sync(alice)`, World ID via `HumanGate.setVerifier` (Sat), and the ENS writeup + FEEDBACK.md.
 
+**Sat 12:09–12:45: World ID 4.0 gate live (PRs #9–#11), final QA (branch `qa/final`).**
+- Dean merged `WorldHumanVerifier` (World ID 3.0, now marked deprecated, never deployed; #9), the World docs (#10) and `WorldIdV4Gate` (World ID 4.0 with RP-signed `register`; #11). `WorldIdV4Gate` `0x27052bD69b3d961940bCD093C21ba729b6c1B209` (action `fund-lease`) is Sourcify `exact_match`.
+- Sat 12:09: `HumanGate.setVerifier(0x27052bD69b3d961940bCD093C21ba729b6c1B209)` from the deployer ([`0x56b47b25…43e8ee`](https://sepolia.etherscan.io/tx/0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee), block 11783482). From then on `fundLease` reverts `NotVerifiedHuman` for every wallet not registered there, and nobody was: the phone's one `fund-lease` proof had been spent off-chain.
+- Dean deployed a second gate `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa` (action `fund-lease-wallet`, same RP signer, Sourcify `exact_match`) and registered alice on it ([`0xdbbfc6dd…148908`](https://sepolia.etherscan.io/tx/0xdbbfc6dd08fdaa4da200b51e6515a7b60423a7c3f94feb06f4a3b28f65148908), block 11783569). PR #12 records both in `deployments.json` / `docs/WORLD.md`.
+- An anvil fork of Sepolia rehearsed the remaining step: `setVerifier(0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa)` from the deployer, then alice's `fundLease` succeeds (before it: `NotVerifiedHuman`).
+- QA fixes: the app no longer says "World ID coming soon", tells a rejected wallet how to register, shows the verifier in the footer and re-reads the gate every 12 s; `live-smoke` fails on an open or unrecorded verifier and on an unverified demo tenant; 12 new `WorldIdV4Gate` security and end-to-end tests (root forge 163/163 in 12 suites, app 95/95 + build).
+- Still open: the `setVerifier(0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa)` tx (deployer keystore), merging PR #12, and topping alice up past 2.0 USDC.
+
 ---
 
 ## Open items
@@ -170,4 +178,4 @@ Sourcify pages: `https://repo.sourcify.dev/11155111/<address>`. Etherscan needs 
 - [ ] `app/src/lib/ens.ts`: claim step (`simulateContract` for availability, `labelOf(account)` on connect, `normalize()`), profile card (show `rentouts.*` only when `status == active` and `addr` matches).
 - [ ] ENS section of README + `FEEDBACK.md`; paste the exact Tokyo ENS prize text into `docs/ens/PRIZE.md`.
 - [ ] Ask ENS mentors: another Sepolia redeploy before Sunday? Does app.ens.dev show UserRegistry subnames + custom keys?
-- [ ] World gate: **on hold** (team decision 2026-09-25).
+- [x] World gate: live since Sat 12:09 JST (`HumanGate.verifier` = `WorldIdV4Gate`, [`0x56b47b25…43e8ee`](https://sepolia.etherscan.io/tx/0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee)). Alice is registered on the second gate `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`; the switch to it is one `setVerifier` from the deployer (see the Sat 12:45 entry).
