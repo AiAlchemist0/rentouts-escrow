@@ -91,7 +91,7 @@ function Footer() {
             note={arbiterIsAi ? '(AI judge contract with a human arbiter)' : undefined}
           />
           {ai && !arbiterIsAi ? <ContractRow name="AIArbiter" address={ai.address} note="(AI judge contract with a human arbiter)" /> : null}
-          {ai ? <ContractRow name="Human arbiter" address={ai.human} note="(can always override the AI)" /> : null}
+          {ai ? <ContractRow name="Human arbiter" address={ai.human} note="(can override the AI until a ruling executes)" /> : null}
           {ai ? <ContractRow name="AI judge key" address={ai.agent} note={ai.agent ? '(can only propose)' : '(AI proposals off)'} /> : null}
           {humanGate ? <ContractRow name="HumanGate" address={humanGate} note={gateNote} /> : null}
           {gate.verifier ? (
@@ -133,7 +133,7 @@ export function App() {
           </p>
           <p className="hero-note">
             Testnet demo with Circle test USDC. Disputes go to an AI judge contract with a human arbiter: the AI only
-            proposes a split, and the human can always override it.
+            proposes a split, and the human arbiter can override it until it executes.
           </p>
         </section>
 
