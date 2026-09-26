@@ -155,6 +155,8 @@ Sourcify pages: `https://repo.sourcify.dev/11155111/<address>`. Etherscan needs 
 - A fresh clone of `main` is green: root forge 137/137 (incl. invariants INV-1…4, AI-1…3), ens fork tests 42/42 against live Sepolia, judge 92/92, app 94/94 + production build, `app/scripts/live-smoke.mjs` all wiring checks passed with no local env, and ENS live read OK.
 - Still open: Etherscan verification (needs an API key; Sourcify + Blockscout are exact-match), the first live demo lease + `CredentialSync.sync(alice)`, World ID via `HumanGate.setVerifier` (Sat), and the ENS writeup + FEEDBACK.md.
 
+**Sat 12:47: Tokyo restoration rules pack for the AI judge (`feat/judge-tokyo-rules`, not merged yet).** `judge/src/rules/tokyo.ts` = `tokyo-restoration v1.0.0`, rules TKY-1…7 paraphrasing TMG + MLIT guidance, hashed into every ruling. Answers cite rule ids and the `Proposed` summary ends with them (e.g. `[tokyo-restoration v1.0.0: TKY-2, TKY-4, TKY-5]`, inside the 1000-byte cap); the app shows it as-is. After merging `main` `1f592ac`: judge 109/109, app 94/94 + build, live-smoke + ens-smoke OK.
+
 ---
 
 ## Open items
