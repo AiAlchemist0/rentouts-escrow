@@ -717,10 +717,11 @@ Other suites:
 - **ENS fork tests against live ENSv2 on Sepolia** ([`ens/test/`](./ens/test/)). They deploy fresh proxies and register a random parent inside the fork. Coverage: soulbound (`unsafeTransfer` → `TransferDisallowed`, plus a positive control that proves the gate), the holder can't detach or burn, issuer key-scoped roles enforced by ENS (the issuer writes `rentouts.onTimeRate` and reverts on `avatar`; the holder can't forge), revoke wipes, burns and retires, labels stay blocked across a redeploy, `sync` is permissionless, restores overwritten values and reverts after revoke or when not an issuer, and the deploy script grants judged keys only. The deploy phases also run end to end: `credentialSync` fresh, reused, replaced, interrupted or never landed; a `removeIssuer` that sticks; the `subnames` re-run that revokes derived-key roles; and the state-file checks.
 - **App** (`app/src/lib/*.test.ts`, vitest): the credential trust check, error mapping, the human-gate notice, address input, formatting and label validation.
 
-Counts (Sat 03:15 JST, all green):
-- **Root package: 202** (Sat 13:10 JST, 16 suites). `RentEscrow` 49, `RentEscrowBlacklist` 4, `HumanGate` 16, `WorldIdV4Gate` 6, `WorldIdV4GateSecurity` 12, `WorldHumanVerifier` 8 (deprecated 3.0 path), `DeployEscrow` 15, `LeaseShare1155` 12, `AIArbiter` 34, `DeployAIArbiter` 5, `AllOfHumanGate` 14, `EnsCredentialGate` 15, `DeployEnsWorldGateScript` 2 and `EnsWorldGateFork` 8 (against live Sepolia), plus the two invariant campaigns, which forge counts as one test each.
-- **`judge/`: 92 vitest tests.** The `cast` keystore cross-check is skipped when `cast` is not on `PATH`.
-- **`ens/`: 42 fork tests.** `RentoutsSubnames` 18, `CredentialSync` 10, `DeployEnsPhases` 11 and `DeployEnsRoles` 3. All 42 passed against live Sepolia right after the deploy ([`docs/ens/LOG.md`](./docs/ens/LOG.md)).
+Counts (all green, re-run on `main` at Sat 13:13 JST):
+- **Root package: 202** (16 suites). `RentEscrow` 49, `RentEscrowBlacklist` 4, `HumanGate` 16, `WorldIdV4Gate` 6, `WorldIdV4GateSecurity` 12, `WorldHumanVerifier` 8 (deprecated 3.0 path), `DeployEscrow` 15, `LeaseShare1155` 12, `AIArbiter` 34, `DeployAIArbiter` 5, `AllOfHumanGate` 14, `EnsCredentialGate` 15, `DeployEnsWorldGateScript` 2 and `EnsWorldGateFork` 8 (against live Sepolia), plus the two invariant campaigns, which forge counts as one test each.
+- **`judge/`: 109 vitest tests in 13 files**, including the Tokyo rules pack tests. The `cast` keystore cross-check is skipped when `cast` is not on `PATH`.
+- **`ens/`: 42 fork tests.** `RentoutsSubnames` 18, `CredentialSync` 10, `DeployEnsPhases` 11 and `DeployEnsRoles` 3. All 42 passed against live Sepolia right after the deploy ([`docs/ens/LOG.md`](./docs/ens/LOG.md)) and again at Sat 13:13 JST.
+- **`app/`: 95 vitest tests in 10 files**, plus the production build and `scripts/live-smoke.mjs` / `scripts/ens-smoke.mjs` against live Sepolia.
 
 ---
 
@@ -904,7 +905,7 @@ forge test --match-path 'test/AIArbiter*' -vv     # AI arbiter (AI-1..AI-3)
 # AI judge (Node >= 24, no build step)
 cd judge
 npm ci
-npx tsc --noEmit && npx vitest run                # 92 tests, no real API calls (one needs cast on PATH)
+npx tsc --noEmit && npx vitest run                # 109 tests, no real API calls (one needs cast on PATH)
 npm run judge -- --input fixtures/damage-admitted.json --provider mock   # offline, no key, no chain
 npm run judge -- --input fixtures/injection.json --provider mock         # ABSTAIN, escalated to the human
 

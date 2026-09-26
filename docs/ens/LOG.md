@@ -189,6 +189,11 @@ Sourcify pages: `https://repo.sourcify.dev/11155111/<address>`. Etherscan needs 
 - Go-live = one deploy + one `setVerifier(allOfHumanGate)`; rollback = `setVerifier(0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa)`.
 - 13:10: merged `main` `93062b5` (PRs #14 QA, #15 Tokyo rules) into the branch. Root forge on the merged tree: 202/202 in 16 suites (main's 163 + 31 combined-gate unit + 8 fork tests against live Sepolia); README and ARCHITECTURE counts updated. Still ready to deploy, NOT broadcast: `HumanGate.verifier()` stays gate #2.
 
+**Sat 13:02–13:15: integration: PRs #14–#17 merged to `main` (merge commits only), then this count fix.**
+- In order, each branch first merged the latest `main` and re-ran its suites: [#14](https://github.com/AiAlchemist0/rentouts-escrow/pull/14) QA final pass (`fb804b5`), [#15](https://github.com/AiAlchemist0/rentouts-escrow/pull/15) Tokyo rules pack for the AI judge (`93062b5`), [#16](https://github.com/AiAlchemist0/rentouts-escrow/pull/16) World ID AND ENS combined gate, ready to deploy and not live (`602b185`), [#17](https://github.com/AiAlchemist0/rentouts-escrow/pull/17) submission docs (`f122e60`). The `docs/ens/LOG.md`, README and ARCHITECTURE conflicts kept both sides' entries and facts.
+- Full re-run on `main` `f122e60` at 13:13 JST: root forge 202/202 (16 suites, incl. 8 fork tests against live Sepolia), `ens/` forge 42/42, judge `tsc` clean + vitest 109/109, app `tsc` clean + build + vitest 95/95, `live-smoke` all wiring checks passed (`HumanGate.verifier()` = gate #2 `0x5Cb8…aABa`), `ens-smoke` OK. README and ARCHITECTURE judge/app counts updated (judge was 92).
+- Nothing was broadcast. Still open: `AIArbiter.agent()` is `0xe56E…C3eE` on-chain since 12:51 (EnsAgentRelay, branch `feat/ens-judge-name`, not merged), while `deployments.json` and the docs on `main` still name `0x4a44…d0dA`; alice's USDC top-up to at least 3.0 before the demo leases.
+
 ---
 
 ## Open items
