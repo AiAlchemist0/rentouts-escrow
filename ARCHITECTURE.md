@@ -309,13 +309,13 @@ sequenceDiagram
     Phone-->>Page: Proof of Human (protocol 4.0)
     Page->>World: POST /api/v4/verify/rp_9152be24431cdfcd
     World-->>Page: success, nullifier
-    Note over HG,RE: Not wired yet. Next step records the wallet, then setVerifier
+    Note over HG,RE: WorldIdV4Gate.register stores the wallet, then setVerifier
     Phone->>RE: fundLease
     RE->>HG: isVerified(tenant)
     HG-->>RE: true only after that wallet was verified
 ```
 
-**Why this is not yet the on-chain `WorldHumanVerifier`.** Draft PR [#9](https://github.com/AiAlchemist0/rentouts-escrow/pull/9) checks World ID **3.0** proofs on the Ethereum Sepolia router (`verifyProof`, Orb `groupId = 1`). The iPhone returned protocol **4.0**. World ID 4.0 on-chain verification is on World Chain (and Arc), not on that Sepolia router, so that draft contract cannot accept the proof we just got. The platform path that matches the phone is: verify with `/api/v4/verify`, remember the wallet that was proved, and point `HumanGate` at a verifier whose `isVerified` is true only for those wallets. The gate owner can set that verifier, or set it back to `address(0)` to reopen funding. The verifier holds no tokens and cannot move escrow funds.
+**Contract that matches the phone: `WorldIdV4Gate`.** `WorldHumanVerifier` checks World ID **3.0** `verifyProof` on the Sepolia router. The iPhone returned protocol **4.0**. World ID 4.0's zk verifier (`WorldIDVerifier`) is on World Chain, not Ethereum Sepolia, so the Sepolia escrow cannot call it. `WorldIdV4Gate` is the gate we use instead. After `/api/v4/verify` succeeds, the RP signer attests `(chainId, gate, actionHash, wallet, nullifier, deadline)`. `register` checks that signature, consumes the nullifier, and `isVerified(wallet)` becomes true. The gate owner then calls `HumanGate.setVerifier(WorldIdV4Gate)`. Setting the verifier back to `address(0)` reopens funding. The contract holds no tokens and cannot move escrow funds.
 
 **What World is not allowed to do here.** It does not custody USDC, choose a dispute split, write ENS records, or allowlist a landlord. Landlord allowlisting stays on `LeaseShare1155`. ENS subnames stay the rental name and credential. World only answers "may this tenant fund a new lease?"
 
