@@ -57,7 +57,7 @@ export function Header() {
       <div className="wrap header-row">
         <a className="brand" href="#identity">
           <Logo />
-          <span className="brand-name">RentOuts</span>
+          <span className="brand-name">Dignity</span>
           <span className="brand-sub">Escrow</span>
         </a>
         <div className="header-right">

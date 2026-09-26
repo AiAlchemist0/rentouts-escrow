@@ -47,7 +47,7 @@ export function describeError(name: string, args: readonly unknown[] = []): stri
     case 'InvalidLabel':
       return 'Use 3–32 lowercase letters, digits or hyphens, not starting or ending with a hyphen.'
     case 'AlreadyHasName':
-      return 'This wallet already holds a RentOuts name. Each address gets one.'
+      return 'This wallet already holds a Dignity name. Each address gets one.'
     case 'LabelRetired':
       return 'This name was revoked and retired for good. Pick another one.'
     case 'LabelTaken':
@@ -57,12 +57,12 @@ export function describeError(name: string, args: readonly unknown[] = []): stri
     case 'NotHolder':
       return 'Only the name’s holder can change its profile.'
     case 'UnknownLabel':
-      return 'There is no active RentOuts name with this label.'
+      return 'There is no active Dignity name with this label.'
     case 'ZeroAddress':
       return 'The address can’t be the zero address.'
     case 'NotIssuer':
     case 'NotAdmin':
-      return 'Only a RentOuts issuer can do this.'
+      return 'Only a Dignity issuer can do this.'
     // RentEscrow
     case 'InvalidTerms':
       return 'The escrow rejected these terms. Check the amounts, the period length, the number of periods and the tenant address. The arbiter can’t be the landlord or the tenant, and the tenant can’t be the landlord.'

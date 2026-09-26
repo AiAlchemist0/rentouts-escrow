@@ -1,5 +1,7 @@
 # RentOuts — On-Chain Rental Escrow (ETHGlobal Tokyo 2026)
 
+**Dignity (formerly RentOuts):** the app now shows the product name Dignity; the repo, package, contract and ENS names (`rentouts.eth`, `alice.rentouts.eth`, `judge.rentouts.eth`) are unchanged.
+
 > **Trust-minimized rental escrow** — part of [RentOuts](https://rentouts.co), a blockchain-powered rental marketplace. Deposits and rent are held in USDC by a smart contract (not a landlord), and released/refunded on agreed conditions. Built live at **ETHGlobal Tokyo 2026** (Sep 25–27).
 
 **Live demo:** [https://rentouts-escrow-demo.dofusd.workers.dev](https://rentouts-escrow-demo.dofusd.workers.dev): the demo app from [`app/`](./app/README.md), static, on Ethereum Sepolia (MetaMask on Sepolia, a little test ETH and Circle test USDC). It holds no keys or secrets; every address comes from this repo's `deployments.json` and `ens/deployments/sepolia.json`.

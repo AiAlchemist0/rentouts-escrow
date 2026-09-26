@@ -29,7 +29,7 @@ function TenantResolution({ resolved }: { resolved: ResolvedInput }) {
       return (
         <div className="stack-s">
           <p className="status status-hint">
-            {name ? <>This address holds {name}.</> : 'This address has no RentOuts name.'}
+            {name ? <>This address holds {name}.</> : 'This address has no Dignity name.'}
           </p>
           {name ? <CredentialCard name={name} compact /> : null}
         </div>

@@ -36,7 +36,7 @@ export function humanGateNotice({ gate, verified, open }: HumanGateView): HumanG
   if (verified === false) {
     return notice(
       'error',
-      'This wallet hasn’t passed it, so funding would revert. To pass, prove you’re human with World ID 4.0 (World App, Proof of Human) with this wallet’s address as the signal. The RentOuts RP then registers the wallet in the World ID gate: one World ID, one wallet. This page re-checks every few seconds.',
+      'This wallet hasn’t passed it, so funding would revert. To pass, prove you’re human with World ID 4.0 (World App, Proof of Human) with this wallet’s address as the signal. The Dignity RP then registers the wallet in the World ID gate: one World ID, one wallet. This page re-checks every few seconds.',
       true,
     )
   }
