@@ -29,11 +29,13 @@ contract WorldIdV4Gate is IHumanGate {
     event HumanRegistered(address indexed account, uint256 nullifier);
 
     error ZeroAccount();
+    error ZeroSigner();
     error Expired();
     error InvalidNullifier();
     error BadSigner();
 
     constructor(address signer_, string memory action) {
+        if (signer_ == address(0)) revert ZeroSigner();
         signer = signer_;
         actionHash = bytes32(uint256(keccak256(bytes(action))) >> 8);
     }

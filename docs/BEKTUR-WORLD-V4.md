@@ -18,7 +18,11 @@ ENS, `LeaseShare1155`, and `AIArbiter` do not change.
 
 ## What you run, after Dean deploys
 
-Replace `<WorldIdV4Gate>` with the address Dean posts in this PR / `deployments.json`.
+`WorldIdV4Gate` is already deployed and Sourcify-verified:
+
+**`0x27052bD69b3d961940bCD093C21ba729b6c1B209`**
+
+Deploy tx: `0xf6009731cf6bd6431914961d33746cc7bfc8cd626e730f31df0f333d0a6a199c`. Signer is `0xbb80c666Ed8E8B5ec45481f911c7a892f8A842CA`. Action is `fund-lease`. You do not need to deploy it.
 
 ```bash
 export SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
@@ -28,7 +32,7 @@ cast call 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd "owner()(address)" --rpc-ur
 
 # 2. Turn the gate on. This is the only transaction that needs your key.
 cast send 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd \
-  "setVerifier(address)" <WorldIdV4Gate> \
+  "setVerifier(address)" 0x27052bD69b3d961940bCD093C21ba729b6c1B209 \
   --account rentouts-deployer --rpc-url $SEPOLIA_RPC_URL
 
 # 3. Confirm. Must equal <WorldIdV4Gate>, not address(0).

@@ -39,11 +39,11 @@ contract WorldIdV4GateTest is Test {
     }
 
     function test_Register_RevertsOnReusedNullifier() public {
-        bytes32 structHash = _hash();
-        bytes memory sig = _sign(structHash);
-        gateV4.register(alice, 11, block.timestamp + 1 hours, sig);
+        bytes32 aliceHash = _hash();
+        gateV4.register(alice, 11, block.timestamp + 1 hours, _sign(aliceHash));
+        bytes32 bobHash = keccak256(abi.encode(block.chainid, address(gateV4), gateV4.actionHash(), bob, uint256(11), block.timestamp + 1 hours));
         vm.expectRevert(WorldIdV4Gate.InvalidNullifier.selector);
-        gateV4.register(bob, 11, block.timestamp + 1 hours, sig);
+        gateV4.register(bob, 11, block.timestamp + 1 hours, _sign(bobHash));
     }
 
     function test_Register_RevertsOnWrongSigner() public {
