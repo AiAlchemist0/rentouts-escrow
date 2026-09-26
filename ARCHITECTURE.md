@@ -274,6 +274,51 @@ sequenceDiagram
 
 The app reads `humanGate()`, `verifier()` and `isVerified(account)` and shows the gate's state on the fund step. A wallet the gate would refuse sees `NotVerifiedHuman` before MetaMask opens.
 
+#### How World ID is used on RentOuts
+
+World ID is the proof-of-personhood check at **one** moment: a tenant funding a new lease. It is not required to browse, list, claim rent, close a lease, open a dispute, or sync an ENS credential. The escrow never sees a World ID, a document, or a selfie. It only asks `isVerified(tenant)`.
+
+**What is deployed today.** `RentEscrow` on Ethereum Sepolia (`0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18`) has an immutable `humanGate` of `HumanGate` `0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd`. That gate's `verifier` is `address(0)`, so funding is **open**. The gate owner (the deployer EOA) turns the check on later with `setVerifier`. No escrow redeploy. Funded leases never consult the gate again.
+
+**What was proved with a real World App (2026-09-26).** A production World ID **4.0** Proof of Human was approved on an iPhone and accepted by World:
+
+| | |
+|---|---|
+| Developer Portal app | RentOuts Escrow, team RentOuts |
+| `app_id` | `app_2432bfa166623cfbbf813744d0b4b00c` |
+| `rp_id` | `rp_9152be24431cdfcd` |
+| Action | `fund-lease` |
+| Signal | `rentouts-fund-lease` |
+| Credential | `proof_of_human` |
+| Verify | `POST https://developer.world.org/api/v4/verify/rp_9152be24431cdfcd` → HTTP 200, `success: true`, `environment: production`, `protocol_version: 4.0` |
+| Registration | production and staging RP status `registered` |
+
+The phone does not talk to the escrow. The Mac page builds an RP-signed IDKit request (the signing key stays on the server, in `~/.rentouts-world.env`, never in the client or this repo). World App on the iPhone approves the proof. IDKit returns it. The server forwards that payload unchanged to World's verify API. Only a `success: true` result means the person is a unique human for `fund-lease`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Phone as iPhone World App
+    participant Page as Local IDKit page
+    participant Sign as Server (RP signing key)
+    participant World as developer.world.org
+    participant HG as HumanGate
+    participant RE as RentEscrow
+    Sign->>Page: rp_context for action fund-lease
+    Page->>Phone: QR / connector URI
+    Phone-->>Page: Proof of Human (protocol 4.0)
+    Page->>World: POST /api/v4/verify/rp_9152be24431cdfcd
+    World-->>Page: success, nullifier
+    Note over HG,RE: Not wired yet. Next step records the wallet, then setVerifier
+    Phone->>RE: fundLease
+    RE->>HG: isVerified(tenant)
+    HG-->>RE: true only after that wallet was verified
+```
+
+**Why this is not yet the on-chain `WorldHumanVerifier`.** Draft PR [#9](https://github.com/AiAlchemist0/rentouts-escrow/pull/9) checks World ID **3.0** proofs on the Ethereum Sepolia router (`verifyProof`, Orb `groupId = 1`). The iPhone returned protocol **4.0**. World ID 4.0 on-chain verification is on World Chain (and Arc), not on that Sepolia router, so that draft contract cannot accept the proof we just got. The platform path that matches the phone is: verify with `/api/v4/verify`, remember the wallet that was proved, and point `HumanGate` at a verifier whose `isVerified` is true only for those wallets. The gate owner can set that verifier, or set it back to `address(0)` to reopen funding. The verifier holds no tokens and cannot move escrow funds.
+
+**What World is not allowed to do here.** It does not custody USDC, choose a dispute split, write ENS records, or allowlist a landlord. Landlord allowlisting stays on `LeaseShare1155`. ENS subnames stay the rental name and credential. World only answers "may this tenant fund a new lease?"
+
 ### (d) Dispute: evidence, AI proposal, challenge window, human override
 
 ```mermaid
@@ -724,7 +769,7 @@ Resulting balances: issuer 600, allowlisted recipient 400, totalSupply 1000.
 - **The token must be a plain ERC-20**, with no fee-on-transfer or rebasing (USDC qualifies).
 
 **Human gate**
-- **World ID is not wired in yet.** The deployed gate is open (verifier `0`), so there is no proof of personhood today; one name per address is the only sybil friction.
+- **World ID is proved, not yet gating leases.** On 2026-09-26 a production World ID 4.0 Proof of Human for action `fund-lease` was approved in World App on an iPhone and accepted by `POST /api/v4/verify/rp_9152be24431cdfcd` (app `app_2432bfa166623cfbbf813744d0b4b00c`). The deployed `HumanGate` is still open (`verifier` `0`), so `fundLease` does not require that proof yet. A World ID 3.0 on-chain verifier cannot check this 4.0 proof. One name per address remains the only on-chain sybil friction until `setVerifier` points at a verifier filled from successful 4.0 checks.
 - **The gate owner is trusted for access only.** The deployer EOA can refuse funding of new leases by choosing the verifier. It can never touch funded leases or funds. A verifier that reverts blocks new funding (fail closed) until the owner fixes or clears it.
 
 **Lease shares**
