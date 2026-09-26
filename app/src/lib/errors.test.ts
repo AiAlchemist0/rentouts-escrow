@@ -43,7 +43,7 @@ describe('describeError', () => {
 
   it('explains the human gate for NotVerifiedHuman', () => {
     expect(describeError('NotVerifiedHuman', [alice])).toBe(
-      '0x4848…e936 hasn’t passed the escrow’s human verification (World ID — coming soon), so it can’t fund a lease.',
+      '0x4848…e936 hasn’t passed the escrow’s human verification (World ID 4.0: not registered in the gate), so it can’t fund a lease.',
     )
     expect(describeError('NotVerifiedHuman')).toMatch(/^This wallet hasn’t passed/)
   })
@@ -81,7 +81,7 @@ describe('errorMessage', () => {
     const data = encodeErrorResult({ abi: rentEscrowAbi, errorName: 'NotVerifiedHuman', args: [alice] })
     expect(errorMessage(revert(rentEscrowAbi, 'fundLease', data))).toMatch(/^0x4848…e936 hasn’t passed the escrow’s human verification/)
     // Also when the revert surfaces through a call whose ABI doesn't list it (decoded against knownErrorsAbi).
-    expect(errorMessage(revert(rentoutsSubnamesAbi, 'register', data))).toMatch(/World ID — coming soon/)
+    expect(errorMessage(revert(rentoutsSubnamesAbi, 'register', data))).toMatch(/World ID 4\.0/)
   })
 
   it('decodes AIArbiter reverts, including the escrow’s bubbling through it', () => {

@@ -17,6 +17,6 @@ contract DeployWorldIdV4Gate is Script {
         vm.stopBroadcast();
         console2.log("WorldIdV4Gate:", address(gate));
         console2.log("signer:", signer);
-        console2.log("Next: HumanGate.setVerifier from the gate owner 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd");
+        console2.log("Next: the HumanGate owner calls setVerifier(gate) on HumanGate 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd");
     }
 }

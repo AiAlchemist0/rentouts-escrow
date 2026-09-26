@@ -32,6 +32,13 @@ const deployments = readJson('../../deployments.json') ?? {}
 const core = onSepolia(deployments.sepolia)
 const ai = onSepolia(deployments.sepoliaAIArbiter)
 const ens = readJson('../../ens/deployments/sepolia.json') ?? {}
+// Every World ID 4.0 gate recorded in deployments.json (any Sepolia entry with a "worldIdV4Gate").
+const worldGates = Object.entries(deployments)
+  .map(([key, entry]) => [key, onSepolia(entry)])
+  .filter(([, e]) => asAddress(e.worldIdV4Gate))
+  .map(([key, e]) => ({ key, gate: asAddress(e.worldIdV4Gate), humanGate: asAddress(e.humanGate), signer: asAddress(e.signer), action: e.action }))
+// The demo tenant (alice.rentouts.eth, docs/DEMO.md) must pass the gate before any lease is funded.
+const demoTenant = asAddress(process.env.SMOKE_TENANT) ?? '0x484811c8c967809bE644A89d677933c29fb9e936'
 
 const rpc = env.VITE_SEPOLIA_RPC_URL?.trim() || 'https://ethereum-sepolia-rpc.publicnode.com'
 const client = createPublicClient({ chain: sepolia, transport: http(rpc) })
@@ -51,7 +58,8 @@ const aiArbiterAbi = parseAbi([
   'function challengeWindow() view returns (uint32)',
 ])
 const leaseShareAbi = parseAbi(['function minter() view returns (address)', 'function owner() view returns (address)'])
-const humanGateAbi = parseAbi(['function verifier() view returns (address)'])
+const humanGateAbi = parseAbi(['function verifier() view returns (address)', 'function isVerified(address account) view returns (bool)'])
+const worldGateAbi = parseAbi(['function signer() view returns (address)', 'function isVerified(address account) view returns (bool)'])
 const credentialSyncAbi = parseAbi(['function escrow() view returns (address)', 'function subnames() view returns (address)'])
 const subnamesAbi = parseAbi(['function isIssuer(address account) view returns (bool)'])
 const erc20Abi = parseAbi(['function symbol() view returns (string)', 'function decimals() view returns (uint8)'])
@@ -142,7 +150,29 @@ else {
   else ok(`escrow.humanGate() = ${humanGate}`)
   if (await hasCode('HumanGate', humanGate)) {
     const verifier = await read(humanGate, humanGateAbi, 'verifier')
-    console.log(`      verifier ${verifier === zeroAddress ? 'zero (open: everyone passes)' : verifier}`)
+    const recorded = worldGates.filter((g) => !g.humanGate || same(g.humanGate, humanGate))
+    const match = recorded.find((g) => same(g.gate, verifier))
+    if (verifier === zeroAddress) {
+      // An open gate lets everyone fund, which takes World ID out of the flow: only OK when done on purpose.
+      if (process.env.SMOKE_ALLOW_OPEN_GATE) ok('humanGate.verifier() = zero (open: everyone passes; SMOKE_ALLOW_OPEN_GATE set)')
+      else fail('humanGate.verifier() = zero: the gate is open and World ID is out of the funding path (SMOKE_ALLOW_OPEN_GATE=1 if on purpose)')
+    } else if (!recorded.length) ok(`humanGate.verifier() = ${verifier} (no World gate recorded in deployments.json)`)
+    else if (!match) fail(`humanGate.verifier() = ${verifier}, expected a recorded WorldIdV4Gate: ${recorded.map((g) => `${g.gate} (${g.key})`).join(', ')}`)
+    else {
+      ok(`humanGate.verifier() = ${verifier} (WorldIdV4Gate "${match.key}", action ${match.action})`)
+      if (match.signer && (await hasCode('WorldIdV4Gate', verifier))) {
+        expectEq('worldIdV4Gate.signer()', await read(verifier, worldGateAbi, 'signer'), match.signer)
+      }
+    }
+    if (await read(humanGate, humanGateAbi, 'isVerified', [demoTenant])) ok(`humanGate.isVerified(demo tenant ${demoTenant}) = true`)
+    else {
+      const elsewhere = []
+      for (const g of recorded) if (!same(g.gate, verifier) && (await read(g.gate, worldGateAbi, 'isVerified', [demoTenant]))) elsewhere.push(`${g.gate} (${g.key})`)
+      const hint = elsewhere.length
+        ? `it is registered on ${elsewhere.join(', ')}: the gate owner must setVerifier to that gate`
+        : 'register it in the World gate (docs/DEMO.md pre-flight step 0)'
+      fail(`humanGate.isVerified(demo tenant ${demoTenant}) = false, so its fundLease reverts NotVerifiedHuman; ${hint}`)
+    }
   }
 }
 

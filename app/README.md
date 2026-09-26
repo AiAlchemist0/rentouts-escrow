@@ -60,7 +60,7 @@ which the ENS deploy script writes.
 | 1. Claim your name | tenant | `RentoutsSubnames.register(label, you)`. The label is checked with viem `normalize()` (ENSIP-15) plus the contract's own rule. Availability is a `simulateContract(register)`, so taken, retired and one-name-per-address all come back as readable messages. Once you hold a name, you see your credential card |
 | Credential card | anyone | `getEnsAddress` and `getEnsText` for `rentouts.credential`, `.status`, `.leasesCompleted`, `.disputes`, `.rentPaid`, `.depositReturnRate` and `.rating`, all through the ENSv2 Universal Resolver. Stats are shown only if `status == active` **and** the name resolves to the holder `RentoutsSubnames.holderOf(labelhash)` has on record. The card links to the ENS app, the claim transaction on Etherscan and the resolver. It also compares ENS with the escrow's `tenantStats` and offers a sync when ENS is behind. `?name=alice.rentouts.eth` opens a lookup directly |
 | 2. Create a lease | landlord | The tenant is entered as an **ENS name** (or a 0x address). The name is resolved live through the Universal Resolver, and the tenant's credential is shown before you sign. Amounts are in USDC (6 decimals). The defaults are a 120 s period and 3 periods. The app warns if the landlord isn't on the lease-share allowlist, which would make `createLease` revert |
-| 3. Fund the lease | tenant | Your USDC and ETH balances, then `approve` for the exact amount and `fundLease`. If `RentEscrow.humanGate()` is set, a “Human verification required (World ID — coming soon)” notice explains the gate. The app reads `isVerified(you)` and `verifier()` (open gate = everyone passes) and disables both buttons for a wallet the gate rejects. A `NotVerifiedHuman` revert reads as a sentence |
+| 3. Fund the lease | tenant | Your USDC and ETH balances, then `approve` for the exact amount and `fundLease`. If `RentEscrow.humanGate()` is set, a “Human verification required (World ID)” notice explains the gate. The app reads `isVerified(you)` and `verifier()` (open gate = everyone passes; on Sepolia the verifier is a World ID 4.0 `WorldIdV4Gate`), re-checks both every 12 s, and disables both buttons for a wallet the gate rejects, with how to register it. A `NotVerifiedHuman` revert reads as a sentence |
 | 4. Run the lease | both, AI judge, human arbiter | Every lease you're part of (or all of them), with its state, a per-period bar, a countdown to the next unlock, what's in escrow and what's claimable. Buttons: release rent (`claimRent`), `closeLease`, `openDispute` and `cancelLease`. A disputed lease shows the **AI dispute judge** panel (below). Closed leases offer `CredentialSync.sync(tenant)`, after which the card refetches |
 | 5. Lease shares | landlord | Curvegrid RWA: your `LeaseShare1155` balance per lease (token id = lease id) and a transfer form. The recipient can be an ENS name. The allowlist is checked before sending, and a `NotAllowlisted` revert is explained in plain words |
 
@@ -147,11 +147,13 @@ We also checked the over-long statement guard, the executed and resolved-by-huma
   landlord or the tenant, and the app checks this before you sign.
 - The judge service runs off-chain (`judge/`). The team starts it for a disputed lease, so a proposal isn't
   instant. If the judge abstains, the lease waits for the human arbiter.
-- World ID isn't integrated. The escrow has a human-gate seam (`humanGate()`); while its `HumanGate` has no
-  verifier, every wallet passes. The app can't verify anyone itself.
+- The app doesn't run the World ID flow itself. The escrow's `HumanGate` forwards `isVerified` to a
+  `WorldIdV4Gate` (World ID 4.0): a wallet is registered there after a World App Proof of Human, by the RentOuts
+  RP signer's attestation (see [docs/WORLD.md](../docs/WORLD.md)). The app only reads the result and shows the
+  verifier in the footer. With the verifier set to `address(0)` every wallet passes.
 - The ENS app (`sepolia.app.ens.domains`) may not display ENSv2 beta names yet. The Etherscan links and the
   in-app reads are the source of truth.
-- `CredentialSync` wasn't deployed when this was written. The app calls only `sync(address)` and shows
+- `CredentialSync` is live at `0xd0783EC7B0668652718f3977Ca92235fe6bF9c56`. The app calls only `sync(address)` and shows
   `rentouts.*` values exactly as written. A bare number gets a unit, so `rentPaid` gets “USDC” and
   `depositReturnRate` gets “%”. `CredentialSync` should therefore write human units (e.g. `0.60`), not raw token
   units.
