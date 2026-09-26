@@ -7,7 +7,8 @@ The model gives answers, not a verdict:
 ```
 lease + evidence ──► model: 3 yes/no answers (each with a probability) + severity + short rationale
                  ──► code: rubric → tenantBps (0 / 25 / 50 / 75 / 100 %)   or ABSTAIN → human arbiter
-                 ──► AIArbiter.propose(leaseId, tenantBps, rulingHash, confidence, summary)
+                 ──► judge.rentouts.eth must resolve to this key (ENS), else refuse
+                 ──► EnsAgentRelay.propose(...) ──► AIArbiter.propose(leaseId, tenantBps, rulingHash, confidence, summary)
                  ──► challenge window (tenant or landlord can appeal) ──► execute (anyone) or human
 ```
 
@@ -26,8 +27,9 @@ npm run judge -- --input fixtures/injection.json --provider mock    # -> ABSTAIN
 ./run.sh --lease 3                     # GLM; run.sh loads ../../.secrets/ai.env if present
 ./run.sh --lease 3 --provider mock
 
-# Live, and send the proposal (asks for the judge keystore password, input hidden)
-./run.sh --lease 3 --propose
+# Live, and send the proposal (asks for the judge keystore password, input hidden). Since Sat 12:51 JST
+# AIArbiter.agent() is the EnsAgentRelay, so proposals go through it:
+JUDGE_RELAY=0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE ./run.sh --lease 3 --propose
 ```
 
 `run.sh` sources the team secrets file (`../../.secrets/ai.env`, or the file in `JUDGE_SECRETS_FILE`) into its own process, then runs `node src/cli.ts`. It never prints the file. `npm run judge -- …` does the same thing using the environment you already have.
@@ -59,8 +61,10 @@ Every run prints the lease, the answers, the rubric arithmetic, the decision, th
 | `JUDGE_KEYSTORE` | `rentouts-judge` | Foundry keystore name, in `~/.foundry/keystores/` (`JUDGE_KEYSTORE_DIR` to change) |
 | `JUDGE_KEYSTORE_PASSWORD` | (hidden prompt) | only for non-interactive runs |
 | `AI_ARBITER`, `SEPOLIA_RPC_URL`, `JUDGE_FROM_BLOCK` | | see flags |
+| `JUDGE_ENS_NAME` | `judge.rentouts.eth` | the judge's ENS name. `--propose` refuses unless it resolves to the signing key and that key is the one AIArbiter lets propose (see *The judge's ENS name*). `off` disables the check, e.g. for local mock runs |
+| `JUDGE_RELAY` | (none) | send through this `EnsAgentRelay` (`../src/EnsAgentRelay.sol`) while the human has made it AIArbiter's agent. **Live: `0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE`**, `AIArbiter.agent()` since Sat 12:51 JST, so every live `--propose` needs it. Without it, `--propose` refuses because the key is not the agent |
 
-The judge key is an ordinary Foundry keystore: `cast wallet import rentouts-judge --interactive`. Its address is AIArbiter's `agent`, and it needs a little Sepolia ETH for gas. The key is decrypted in memory for one transaction and never logged.
+The judge key is an ordinary Foundry keystore: `cast wallet import rentouts-judge --interactive`. Its address, `0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA`, holds `judge.rentouts.eth`. It was AIArbiter's `agent` until Sat 12:51 JST; since then the agent is the `EnsAgentRelay`, and the key proposes through it. It needs a little Sepolia ETH for gas. The key is decrypted in memory for one transaction and never logged.
 
 ## Demo flow on Sepolia
 
@@ -81,7 +85,7 @@ Then, for a funded lease:
 cast send <rentEscrow> "openDispute(uint256)" 1 --account <landlord or tenant> --rpc-url sepolia
 cast send <aiArbiter> "submitEvidence(uint256,string)" 1 "The tenant broke the kitchen window ..." --account <landlord> --rpc-url sepolia
 cast send <aiArbiter> "submitEvidence(uint256,string)" 1 "I broke it by accident ..." --account <tenant> --rpc-url sepolia
-./run.sh --lease 1 --propose                 # ruling in seconds; prints the appeal deadline
+JUDGE_RELAY=<ensAgentRelay> ./run.sh --lease 1 --propose   # ruling in seconds; prints the appeal deadline (drop JUDGE_RELAY if the agent is the judge key)
 cast send <aiArbiter> "appeal(uint256)" 1 --account <tenant or landlord> --rpc-url sepolia          # optional, inside the window
 cast send <aiArbiter> "execute(uint256)" 1 --account <anyone> --rpc-url sepolia                     # after the window, if not appealed
 cast send <aiArbiter> "resolveByHuman(uint256,uint16)" 1 5000 --account <human> --rpc-url sepolia   # any time: direct or override
@@ -116,7 +120,16 @@ cast send <aiArbiter> "resolveByHuman(uint256,uint16)" 1 5000 --account <human> 
 
    Splitting the rent question into "is a rent claim made?" and "is it valid?" would also work, but it changes what the model is asked and would invalidate the recorded answers. The rule above lives in code only: the checklist and the prompt are unchanged.
 4. **Commit** (`src/canonical.ts`). The ruling is canonical JSON with sorted keys and no whitespace. It holds the chain, escrow, arbiter and lease, the `inputHash` of everything read (facts and every statement), the provider and model, the answers, the rubric arithmetic, the confidence and threshold, and the decision. It contains no timestamps, so it is reproducible. `rulingHash = keccak256(canonical JSON)` goes on-chain with the proposal, and anyone holding the saved file can check it with `--verify` (add `--onchain` to compare it with the proposal on Sepolia).
-5. **Propose** (`src/propose.ts`). The judge decrypts the keystore (Web3 Secret Storage v3, the format `cast` writes), checks that its address is AIArbiter's `agent`, simulates, then sends `propose(leaseId, tenantBps, rulingHash, confidenceBps, summary)`. The summary is the rationale, cut to 1000 bytes. If the lease has already been appealed, or the open proposal's window is over, it refuses before signing. The agent can only propose, never withdraw: if a rerun (say, after new evidence) abstains while an earlier proposal is still open, that proposal still executes at its deadline. The CLI then prints a WARNING with the open split and deadline instead of "the human arbiter decides", and `--propose` exits **3**. Stopping it takes an appeal by a party or `resolveByHuman`.
+5. **Propose** (`src/propose.ts`). The judge decrypts the keystore (Web3 Secret Storage v3, the format `cast` writes), checks that its address is AIArbiter's `agent` (or, with `JUDGE_RELAY`, the relay's `judge()` while the relay is the agent) and that `judge.rentouts.eth` resolves to it (see *The judge's ENS name*), simulates, then sends `propose(leaseId, tenantBps, rulingHash, confidenceBps, summary)` to AIArbiter or through the relay. The summary is the rationale, cut to 1000 bytes. If the lease has already been appealed, or the open proposal's window is over, it refuses before signing. The agent can only propose, never withdraw: if a rerun (say, after new evidence) abstains while an earlier proposal is still open, that proposal still executes at its deadline. The CLI then prints a WARNING with the open split and deadline instead of "the human arbiter decides", and `--propose` exits **3**. Stopping it takes an appeal by a party or `resolveByHuman`.
+
+### The judge's ENS name
+
+The judge key has an ENS name, `judge.rentouts.eth` (issued by RentoutsSubnames, soulbound; see `ens/README.md`). It is part of how a proposal gets out, not a label:
+
+- **Off-chain, every `--propose`** (`src/ens.ts`): after decrypting the key and before simulating, the judge resolves `JUDGE_ENS_NAME` through the ENSv2 Universal Resolver. It refuses to send unless the name resolves to the signing key **and** that key is the one AIArbiter lets propose: `AIArbiter.agent()` itself, or, with `JUDGE_RELAY`, the relay's `judge()` while `AIArbiter.agent()` is the relay. An unregistered or revoked name, or one pointing at another key, stops the proposal. Every live run also prints a read-only `judge ENS` line saying whether `--propose` would pass.
+- **On-chain, with the relay (live since Sat 12:51 JST)**: `EnsAgentRelay` [`0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE`](https://eth-sepolia.blockscout.com/address/0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE) is AIArbiter's agent: the human called `setAgent(relay)` in [`0x0fc2c12c…bb44ad`](https://sepolia.etherscan.io/tx/0x0fc2c12c8686c3b24ee9435a560cc9e795ae675eb057095066969b2ce3bb44ad) (block 11783678), no redeploy. The relay forwards `propose` only from the current holder of `judge.rentouts.eth` (RentoutsSubnames `holderOf` and the ENS registry owner), which is the judge key `0x4a44…d0dA` (registered at 12:47 JST, block 11783660). The judge key can no longer call AIArbiter directly (`NotAgent`), and revoking the name would stop the AI at once. The live name is never revoked (labels are single-use); that case runs on a fork (`../test/EnsAgentRelay.fork.t.sol`). Rollback: the human calls `setAgent(0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA)`, and the judge runs without `JUDGE_RELAY`.
+
+`JUDGE_ENS_NAME=off` skips the lookup (the agent check stays), for local runs against a chain without the name.
 
 ### Evidence is attacker-controlled
 
@@ -183,7 +196,7 @@ What the contracts guarantee whatever the model says: AIArbiter's only state-cha
 
 ```bash
 npx tsc --noEmit
-npx vitest run      # 109 tests; the cast keystore cross-check runs when `cast` is on PATH
+npx vitest run      # 123 tests in 14 files; the cast keystore cross-check runs when `cast` is on PATH
 ```
 
 The tests cover:
@@ -198,6 +211,7 @@ The tests cover:
 - saved rulings: hash-named records, `--verify` catching edited input, and `--onchain` against a stubbed client;
 - what `--propose` does over an open proposal (including the exit code 3 warning when the judge abstains), and the mock label on-chain;
 - keystore decryption (including a keystore written by `cast wallet new`);
+- the ENS gate (`test/ens.test.ts`, mock resolver): the name must resolve to the signer and to AIArbiter's agent (or the relay's judge), `JUDGE_ENS_NAME=off`, and `JUDGE_RELAY`;
 - lease-fact arithmetic;
 - the CLI end to end on the fixtures.
 

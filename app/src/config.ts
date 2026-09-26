@@ -1,6 +1,7 @@
 import { getAddress, isAddress, zeroAddress, type Address } from 'viem'
 import deployment from '../../ens/deployments/sepolia.json'
 import { parseDeployments, resolveContracts } from './lib/deployments'
+import { DEFAULT_JUDGE_ENS_NAME } from './lib/judgeName'
 
 const env = import.meta.env
 
@@ -81,6 +82,9 @@ export const ENV_CONTRACTS = {
   /** Where AIArbiter log scans start (deployments.json "sepoliaAIArbiter".fromBlock), if known. */
   aiFromBlock: configured.aiFromBlock,
 } as const
+
+/** The AI judge's ENS name, shown on proposals when it resolves to AIArbiter's agent. */
+export const JUDGE_ENS_NAME = env.VITE_JUDGE_ENS_NAME?.trim() || DEFAULT_JUDGE_ENS_NAME
 
 export const EXPLORER = 'https://sepolia.etherscan.io'
 export const ENS_APP = 'https://sepolia.app.ens.domains'

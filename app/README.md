@@ -6,6 +6,8 @@ and the finished lease is written back to the tenant's ENS credential. A dispute
 contract with a human arbiter: the AI only proposes a split, and the human can always override it. It's a demo
 for judges, not a product.
 
+**Hosted:** [https://rentouts-escrow-demo.dofusd.workers.dev](https://rentouts-escrow-demo.dofusd.workers.dev), a static build of this directory on Cloudflare Workers (no secrets; addresses from the repo's deployment records). That build predates the judge-name label below, so until it is rebuilt from `main` its judge panel shows the judge key's address instead of "Proposed by judge.rentouts.eth ✓".
+
 Stack: Vite, React, TypeScript, wagmi v2, viem 2.56 (ENS reads go through the ENSv2 Universal Resolver), and
 TanStack Query. Plain CSS. MetaMask (injected connector) only.
 
@@ -77,8 +79,11 @@ The escrow's arbiter is the `AIArbiter` contract (`src/AIArbiter.sol`, with the 
   `Evidence` events, each with its Etherscan link.
 - **The proposal.** Shows the tenant's share as a percentage, a split bar, and what each side would receive
   from the current escrow. Also shown: the judge's confidence, its one-line summary (from the `Proposed` event),
-  the `rulingHash`, "proposed by the AI judge" with the judge key, and a live countdown to the end of the
-  challenge window. The page doesn't name the model: the `Proposed` event doesn't record it, but the
+  the `rulingHash`, who proposed it, and a live countdown to the end of the challenge window. *Proposed by*
+  reads **judge.rentouts.eth ✓** when that name forward-resolves (Universal Resolver) to the proposing agent,
+  or, since the agent is the `EnsAgentRelay` (Sat 12:51 JST), to the relay's `judge()`; otherwise it shows
+  "AI judge key" and the address (`src/lib/judgeName.ts`, `useJudgeName` in `src/hooks.ts`;
+  `VITE_JUDGE_ENS_NAME` overrides the name). The page doesn't name the model: the `Proposed` event doesn't record it, but the
   `rulingHash` commits to it (`npm run judge -- --verify`).
 - **Appeal**: for the tenant or landlord, inside the window. **Execute**: for anyone, once the window is over
   and nobody appealed. Before that the button shows a countdown.
@@ -105,7 +110,7 @@ use `eth_getLogs` for leases, because public RPCs cap log ranges.
 ## Checks
 
 ```bash
-npm test               # vitest: label validation, address input, USDC formatting, lease timing and parties, error mapping, trust check, human-gate notice, deployments.json + env resolution, AI judge state / countdown / bps <-> %
+npm test               # vitest (98 tests, 11 files): label validation, address input, USDC formatting, lease timing and parties, error mapping, trust check, human-gate notice, deployments.json + env resolution, AI judge state / countdown / bps <-> %, judge-name check
 npm run typecheck      # tsc --noEmit
 npm run build          # typecheck + vite build
 npm run ens:smoke      # live ENSv2 read on Sepolia, no wallet
@@ -118,7 +123,22 @@ getters) and checks `RentEscrow.arbiter()` = the AIArbiter, `AIArbiter.escrow()`
 issuer role on `RentoutsSubnames`. For the World gate it requires `HumanGate.verifier()` to be the `WorldIdV4Gate`
 with the latest recorded `setVerifierBlock` in `deployments.json` (an open gate fails unless
 `SMOKE_ALLOW_OPEN_GATE=1`), checks that gate's `signer()`, and requires `HumanGate.isVerified(alice)` to be `true`
-(`SMOKE_TENANT` overrides the tenant). It exits 1 on any mismatch. The World lines, Sat 2026-09-26 12:51 JST:
+(`SMOKE_TENANT` overrides the tenant). For the AI judge it requires `AIArbiter.agent()` to be the agent recorded in
+`deployments.json` (`"sepoliaAIArbiter".agent`, the `EnsAgentRelay` since block 11783678). When the agent is the
+relay, it checks the relay's `arbiter()` and `name()`, requires `relay.judge()` to be the recorded `judgeKey`, and
+requires `judge.rentouts.eth` to resolve (Universal Resolver) to that judge. When the agent is a plain key, the
+name must resolve to the agent itself. It exits 1 on any mismatch. The AI judge lines, Sat 2026-09-26 13:40 JST:
+
+```
+ok    aiArbiter.agent() = 0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE (deployments.json "sepoliaAIArbiter".agent, EnsAgentRelay, since block 11783678)
+ok    ensAgentRelay.arbiter() = 0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5
+ok    ensAgentRelay.name() = judge.rentouts.eth
+ok    ensAgentRelay.judge() (deployments.json "sepoliaAIArbiter".judgeKey) = 0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA
+ok    judge.rentouts.eth -> 0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA = the relay's judge (Universal Resolver)
+ok    ens/deployments/sepolia.json judgeHolder = 0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA
+```
+
+The World lines, Sat 2026-09-26 12:51 JST:
 
 ```
 ok    escrow.humanGate() = 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd

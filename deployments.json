@@ -47,7 +47,15 @@
     "previousVerifier": "0x27052bD69b3d961940bCD093C21ba729b6c1B209"
   },
   "sepoliaAIArbiter": {
-    "agent": "0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA",
+    "agent": "0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE",
+    "agentKind": "EnsAgentRelay",
+    "agentSince": "0x0fc2c12c8686c3b24ee9435a560cc9e795ae675eb057095066969b2ce3bb44ad",
+    "agentSinceBlock": 11783678,
+    "agentSetBy": "0x798b01Cef62b889943Ce1D3C5011a755B297e486",
+    "judgeKey": "0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA",
+    "judgeName": "judge.rentouts.eth",
+    "initialAgent": "0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA",
+    "agentNote": "Since block 11783678 AIArbiter.agent() is the EnsAgentRelay: the judge key can propose only through it, and only while it holds judge.rentouts.eth. Rollback: the human's setAgent(judgeKey).",
     "aiArbiter": "0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5",
     "chainId": 11155111,
     "challengeWindow": 120,
@@ -63,5 +71,25 @@
     "leaseShare1155": "0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09",
     "rentEscrow": "0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18",
     "token": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+  },
+  "sepoliaEnsAgentRelay": {
+    "aiArbiter": "0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5",
+    "chainId": 11155111,
+    "deployer": "0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE",
+    "ensAgentRelay": "0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE",
+    "deployTx": "0xabc6a72d69a5063d2ce3593c390daf5de2c085e6d0a20f87b2b3e4866ccba570",
+    "deployBlock": 11783676,
+    "verified": "sourcify exact_match, blockscout",
+    "fromBlock": 11783675,
+    "name": "judge.rentouts.eth",
+    "judge": "0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA",
+    "judgeRegisterTx": "0x5454ab9bf9e6c62ba94726628daf159fbfd087aa24cdbd39f21718b72e8d4e73",
+    "judgeRegisterBlock": 11783660,
+    "rentoutsSubnames": "0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60",
+    "setAgentTx": "0x0fc2c12c8686c3b24ee9435a560cc9e795ae675eb057095066969b2ce3bb44ad",
+    "setAgentBlock": 11783678,
+    "setAgentBy": "0x798b01Cef62b889943Ce1D3C5011a755B297e486",
+    "status": "live",
+    "rollback": "AIArbiter.setAgent(0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA) by the human"
   }
 }

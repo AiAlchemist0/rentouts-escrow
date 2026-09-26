@@ -81,6 +81,7 @@ contract DeployEns is Script {
         address pendingEscrow;
         address[] retiredCredentialSyncs; // superseded syncs; their issuer right is re-checked every run
         address[] removedIssuers; // removeIssuer() targets; subnames() won't grant them again
+        address judgeHolder; // holder of judge.<parent> (script/JudgeName.s.sol), once the chain shows it
     }
 
     string label;
@@ -621,6 +622,7 @@ contract DeployEns is Script {
         s.pendingEscrow = _addrAt(json, "pendingEscrow");
         s.retiredCredentialSyncs = _addrsAt(json, "retiredCredentialSyncs");
         s.removedIssuers = _addrsAt(json, "removedIssuers");
+        s.judgeHolder = _addrAt(json, "judgeHolder");
     }
 
     function _save(State memory s) internal {
@@ -645,6 +647,10 @@ contract DeployEns is Script {
         }
         if (s.retiredCredentialSyncs.length != 0) o.serialize("retiredCredentialSyncs", s.retiredCredentialSyncs);
         if (s.removedIssuers.length != 0) o.serialize("removedIssuers", s.removedIssuers);
+        if (s.judgeHolder != address(0)) {
+            o.serialize("judgeName", string.concat("judge.", _parentName()));
+            o.serialize("judgeHolder", s.judgeHolder);
+        }
         string memory json = o.serialize("universalResolver", EnsSepolia.UNIVERSAL_RESOLVER);
         vm.writeJson(json, _statePath());
     }

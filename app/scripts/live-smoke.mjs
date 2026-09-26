@@ -3,11 +3,14 @@
 //   node scripts/live-smoke.mjs            (npm run live:smoke)
 // Addresses are resolved the way the app resolves them: VITE_* from the environment and app/.env*.local (Vite's
 // loadEnv, dev mode), then the repo-root deployments.json ("sepolia" / "sepoliaAIArbiter"), then the escrow's
-// own getters. Then it checks that the contracts point at each other. Exits 1 on any mismatch.
+// own getters. Then it checks that the contracts point at each other, that AIArbiter.agent() is the agent
+// deployments.json records (the EnsAgentRelay since block 11783678), and that judge.rentouts.eth resolves to the
+// key that agent lets propose (the relay's judge, the recorded "judgeKey"). Exits 1 on any mismatch.
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createPublicClient, getAddress, http, isAddress, isAddressEqual, parseAbi, zeroAddress } from 'viem'
 import { sepolia } from 'viem/chains'
+import { normalize } from 'viem/ens'
 import { loadEnv } from 'vite'
 
 const appDir = fileURLToPath(new URL('..', import.meta.url))
@@ -31,6 +34,13 @@ const onSepolia = (entry) => (entry && (entry.chainId === undefined || Number(en
 const deployments = readJson('../../deployments.json') ?? {}
 const core = onSepolia(deployments.sepolia)
 const ai = onSepolia(deployments.sepoliaAIArbiter)
+// The AI judge's ENS gate: "sepoliaAIArbiter".agent is the on-chain agent (the EnsAgentRelay since block 11783678),
+// "judgeKey" the key that holds judge.rentouts.eth and signs; "sepoliaEnsAgentRelay" records the relay itself.
+const relayRecord = onSepolia(deployments.sepoliaEnsAgentRelay)
+const recordedAgent = asAddress(ai.agent)
+const recordedJudgeKey = asAddress(ai.judgeKey) ?? asAddress(relayRecord.judge)
+const recordedRelay = asAddress(relayRecord.ensAgentRelay)
+const judgeEnsName = (typeof ai.judgeName === 'string' && ai.judgeName) || (typeof relayRecord.name === 'string' && relayRecord.name) || 'judge.rentouts.eth'
 const ens = readJson('../../ens/deployments/sepolia.json') ?? {}
 // Every World ID 4.0 gate recorded in deployments.json (any Sepolia entry with a "worldIdV4Gate"). setVerifierBlock is
 // the block of the HumanGate.setVerifier that pointed at it; the highest one is the gate that must be live now.
@@ -70,6 +80,7 @@ const humanGateAbi = parseAbi(['function verifier() view returns (address)', 'fu
 const worldGateAbi = parseAbi(['function signer() view returns (address)', 'function isVerified(address account) view returns (bool)'])
 const credentialSyncAbi = parseAbi(['function escrow() view returns (address)', 'function subnames() view returns (address)'])
 const subnamesAbi = parseAbi(['function isIssuer(address account) view returns (bool)'])
+const relayAbi = parseAbi(['function judge() view returns (address)', 'function name() view returns (string)', 'function arbiter() view returns (address)'])
 const erc20Abi = parseAbi(['function symbol() view returns (string)', 'function decimals() view returns (uint8)'])
 
 let failures = 0
@@ -149,6 +160,62 @@ if (await hasCode('AIArbiter', aiArbiter)) {
   const aiAgent = agent === zeroAddress ? 'zero (AI proposals off)' : agent
   const pending = pendingHuman === zeroAddress ? 'none' : pendingHuman
   console.log(`      agent ${aiAgent}, challengeWindow ${challengeWindow}s, pendingHuman ${pending}`)
+  // The recorded agent applies to the recorded AIArbiter only (an env override may point elsewhere).
+  if (recordedAgent && same(aiArbiter, asAddress(ai.aiArbiter))) {
+    const since = Number.isSafeInteger(ai.agentSinceBlock) ? `, since block ${ai.agentSinceBlock}` : ''
+    same(agent, recordedAgent)
+      ? ok(`aiArbiter.agent() = ${agent} (deployments.json "sepoliaAIArbiter".agent${ai.agentKind ? `, ${ai.agentKind}` : ''}${since})`)
+      : fail(`aiArbiter.agent() = ${agent}, but deployments.json "sepoliaAIArbiter".agent is ${recordedAgent}: the chain and deployments.json disagree`)
+  }
+  await checkJudgeName(aiArbiter, agent)
+}
+
+// judge.rentouts.eth: when the agent is the EnsAgentRelay, the relay forwards only for the name's holder, so the name
+// must resolve to relay.judge() (and that to the recorded judgeKey); when the agent is a plain key, to the agent itself.
+async function checkJudgeName(aiArbiter, agent) {
+  if (agent === zeroAddress) {
+    ok(`${judgeEnsName} not checked: AI proposals are off`)
+    return
+  }
+  let expected = agent
+  let what = 'aiArbiter.agent()'
+  const code = await client.getCode({ address: agent })
+  if (code && code !== '0x') {
+    if (recordedRelay && !same(agent, recordedRelay)) {
+      fail(`aiArbiter.agent() ${agent} is a contract, but the recorded EnsAgentRelay is ${recordedRelay}`)
+      return
+    }
+    const [relayJudge, relayName, relayArbiter] = await Promise.all([
+      read(agent, relayAbi, 'judge'),
+      read(agent, relayAbi, 'name'),
+      read(agent, relayAbi, 'arbiter'),
+    ])
+    expectEq('ensAgentRelay.arbiter()', relayArbiter, aiArbiter)
+    relayName === judgeEnsName ? ok(`ensAgentRelay.name() = ${relayName}`) : fail(`ensAgentRelay.name() = ${relayName}, expected ${judgeEnsName}`)
+    if (relayJudge === zeroAddress) {
+      fail(`ensAgentRelay.judge() = zero: ${judgeEnsName} has no live holder, so the AI judge cannot propose`)
+      return
+    }
+    if (recordedJudgeKey) expectEq('ensAgentRelay.judge() (deployments.json "sepoliaAIArbiter".judgeKey)', relayJudge, recordedJudgeKey)
+    else ok(`ensAgentRelay.judge() = ${relayJudge}`)
+    expected = relayJudge
+    what = "the relay's judge"
+  } else if (recordedJudgeKey && !same(agent, recordedJudgeKey)) {
+    fail(`aiArbiter.agent() = ${agent} (a plain key), but the recorded judgeKey is ${recordedJudgeKey}`)
+  }
+  const universalResolverAddress = asAddress(ens.universalResolver)
+  let resolved
+  try {
+    resolved = await client.getEnsAddress({ name: normalize(judgeEnsName), universalResolverAddress })
+  } catch (err) {
+    fail(`${judgeEnsName} could not be resolved: ${String(err?.message ?? err).split('\n')[0]}`)
+    return
+  }
+  if (!resolved) fail(`${judgeEnsName} does not resolve, so the judge refuses --propose`)
+  else if (same(resolved, expected)) ok(`${judgeEnsName} -> ${resolved} = ${what} (Universal Resolver)`)
+  else fail(`${judgeEnsName} -> ${resolved}, but ${what} is ${expected}: the judge refuses --propose`)
+  const holder = asAddress(ens.judgeHolder)
+  if (holder && resolved) expectEq('ens/deployments/sepolia.json judgeHolder', holder, resolved)
 }
 
 // HumanGate (the app reads it only from the escrow)
