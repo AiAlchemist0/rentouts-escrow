@@ -5,6 +5,8 @@ import {Script, console2} from "forge-std/Script.sol";
 import {IWorldID} from "../src/interfaces/IWorldID.sol";
 import {WorldHumanVerifier} from "../src/WorldHumanVerifier.sol";
 
+/// @custom:deprecated Deploys the World ID 3.0 verifier, which cannot verify World App 4.0 proofs.
+///         Use script/DeployWorldIdV4Gate.s.sol; the live HumanGate verifier is a WorldIdV4Gate.
 /// @notice Deploys WorldHumanVerifier. Does not call HumanGate.setVerifier — the gate owner does
 ///         that after this address exists, which is what turns the open gate on.
 /// @dev    Ethereum Sepolia World ID Router (Orb verifyProof): 0x469449f251692E0779667583026b5A1E99512157

@@ -10,7 +10,9 @@ The demo runs on the live Sepolia deployment, broadcast Sat 2026-09-26 between 0
 |---|---|
 | `RentEscrow` | [`0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18`](https://eth-sepolia.blockscout.com/address/0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18) |
 | `AIArbiter` (the escrow's arbiter, bound to it) | [`0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5`](https://eth-sepolia.blockscout.com/address/0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5) |
-| `HumanGate` → `WorldIdV4Gate` `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa` (alice verified) | [`0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd`](https://eth-sepolia.blockscout.com/address/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) |
+| `HumanGate` (verifier = the `fund-lease-wallet` `WorldIdV4Gate` since Sat 12:42 JST, [tx `0xcd93549e…b86671`](https://sepolia.etherscan.io/tx/0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671)) | [`0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd`](https://eth-sepolia.blockscout.com/address/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) |
+| `WorldIdV4Gate` (World ID 4.0, action `fund-lease-wallet`, **alice registered**; the live verifier since Sat 12:42 JST) | [`0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`](https://eth-sepolia.blockscout.com/address/0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa) |
+| `WorldIdV4Gate` (first gate, action `fund-lease`, nobody registered; verifier Sat 12:09–12:42 JST, **superseded**) | [`0x27052bD69b3d961940bCD093C21ba729b6c1B209`](https://eth-sepolia.blockscout.com/address/0x27052bD69b3d961940bCD093C21ba729b6c1B209) |
 | `LeaseShare1155` (minter = `RentEscrow`) | [`0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09`](https://eth-sepolia.blockscout.com/address/0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09) |
 | `CredentialSync` | [`0xd0783EC7B0668652718f3977Ca92235fe6bF9c56`](https://eth-sepolia.blockscout.com/address/0xd0783EC7B0668652718f3977Ca92235fe6bF9c56) |
 | `RentoutsSubnames` | [`0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60`](https://eth-sepolia.blockscout.com/address/0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60) |
@@ -24,7 +26,7 @@ Two accounts in one MetaMask, switched between steps. The app follows whichever 
 
 | Role | Account | Where | Needs |
 |---|---|---|---|
-| **Tenant: alice** | `0x484811c8c967809bE644A89d677933c29fb9e936`, holds `alice.rentouts.eth` (Foundry keystore `rentouts-alice`) | MetaMask and terminal | ~0.01 Sepolia ETH, **≥ 2.0 test USDC** |
+| **Tenant: alice** | `0x484811c8c967809bE644A89d677933c29fb9e936`, holds `alice.rentouts.eth` (Foundry keystore `rentouts-alice`) | MetaMask and terminal | ~0.01 Sepolia ETH, **≥ 3.0 test USDC** (2.0 is the bare minimum), and **registered in the live `WorldIdV4Gate`** (see pre-flight step 0) |
 | **Landlord: deployer** | `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE` (keystore `rentouts-deployer`). Allowlisted on `LeaseShare1155` by `DeployEscrow`; also owns the share contract and the `HumanGate`. | MetaMask and terminal | ~0.02 Sepolia ETH |
 | **AI judge** | `0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA` (keystore `rentouts-judge`), which is `AIArbiter.agent`. It only ever calls `propose`. | terminal: `judge/run.sh` | ~0.01 Sepolia ETH |
 | **Human arbiter** | `0x798b01Cef62b889943Ce1D3C5011a755B297e486`, which is `AIArbiter.human`. It binds the escrow once, and rules on appealed or abstained leases (`resolveByHuman`). | terminal (its own keystore) | ~0.005 Sepolia ETH |
@@ -35,7 +37,7 @@ Two more addresses are only typed in, never connected:
 - **Investor**: a team-controlled EOA with no other demo role. The share owner allowlists it in pre-flight.
 - **Stranger**: `0x000000000000000000000000000000000000dEaD`, which is not allowlisted.
 
-**Demo lease terms:** deposit **0.20**, rent **0.10** per period, period **60** seconds, **3** periods. Alice prepays 0.50 USDC per lease, and each lease runs 3 minutes. (The app's defaults are larger: 0.25 / 0.20 / 120 s / 3.) The demo uses four leases (A, B, C and the one created live), so alice needs at least 2.0 USDC.
+**Demo lease terms:** deposit **0.20**, rent **0.10** per period, period **60** seconds, **3** periods. Alice prepays 0.50 USDC per lease, and each lease runs 3 minutes. (The app's defaults are larger: 0.25 / 0.20 / 120 s / 3.) The demo uses four leases (A, B, C and the one created live), so alice needs at least 2.0 USDC. She holds exactly 2.000000 (Sat 12:45 JST), which leaves no slack for a mistyped term or a re-created lease: top her up by at least 1 USDC before pre-staging, and type 0.20 / 0.10 / 60 / 3 exactly.
 
 ---
 
@@ -49,9 +51,21 @@ ESCROW=0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18   # RentEscrow
 ARB=0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5      # AIArbiter
 SHARES=0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09   # LeaseShare1155
 GATE=0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd     # HumanGate
+WORLD=0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa    # WorldIdV4Gate fund-lease-wallet (alice registered): HumanGate.verifier since Sat 12:42 JST
 SYNC=0xd0783EC7B0668652718f3977Ca92235fe6bF9c56     # CredentialSync
 ```
 
+0. **The World gate accepts alice: check it before any lease is funded.** The gate is ON: `fundLease` reverts `NotVerifiedHuman` for every wallet the `HumanGate`'s verifier hasn't registered. Status at Sat 12:45 JST, read on-chain:
+   - `HumanGate.verifier()` = `WORLD`, the `WorldIdV4Gate` `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa` (action `fund-lease-wallet`), since Sat 12:42 JST: `setVerifier` from the deployer, tx [`0xcd93549e…b86671`](https://sepolia.etherscan.io/tx/0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671), block 11783640.
+   - Alice is registered there (`register` tx [`0xdbbfc6dd…148908`](https://sepolia.etherscan.io/tx/0xdbbfc6dd08fdaa4da200b51e6515a7b60423a7c3f94feb06f4a3b28f65148908), block 11783569), so `isVerified(alice)` is `true` and **alice can fund**. She is the only registered wallet: any other tenant reverts `NotVerifiedHuman`. A fork rehearsal of the switch confirmed both (alice funds, an unregistered wallet reverts) and that `setVerifier(0)` rolls back.
+   - The first gate `0x27052bD69b3d961940bCD093C21ba729b6c1B209` (action `fund-lease`, the verifier from Sat 12:09 to 12:42 JST) is **superseded**. Nobody is registered there, and nobody on the team can be: Dean's phone spent its `fund-lease` nullifier off-chain (signal `rentouts-fund-lease`).
+
+   Both checks must hold before pre-staging leases A, B and C:
+   ```bash
+   cast call ${GATE} "verifier()(address)" --rpc-url ${SEPOLIA_RPC_URL}      # = WORLD
+   cast call ${GATE} "isVerified(address)(bool)" 0x484811c8c967809bE644A89d677933c29fb9e936 --rpc-url ${SEPOLIA_RPC_URL}   # = true
+   ```
+   `npm run live:smoke` in `app/` checks the same two things: it fails unless `verifier()` is the gate with the latest recorded `setVerifier` in `deployments.json` (`sepoliaWorldIdV4Wallet`) and `isVerified(alice)` is `true`. One World ID registers one wallet on a gate, for good, so don't spend another human's proof on a second wallet unless the demo needs it. If the gate breaks at demo time, the last resort is `setVerifier(0x0000000000000000000000000000000000000000)` from the deployer (see Fallbacks): the gate is then open, which removes World from the funding path.
 1. **Funds.** Top up the four accounts above with Sepolia ETH from the [ETHGlobal faucet](https://ethglobal.com/faucet), and alice with USDC from the ETHGlobal faucet (1 USDC per claim) or [Circle's faucet](https://faucet.circle.com).
 2. **MetaMask.** On Sepolia, with alice and the deployer imported. A Foundry keystore is a standard JSON keystore, so MetaMask can import it (*Import account → JSON file*). Start on **alice**.
 3. **App.** From `app/`: `npm install`, then create `.env.local` with the live addresses. These are every `VITE_*` value the app reads (`app/src/config.ts`):
@@ -74,7 +88,7 @@ SYNC=0xd0783EC7B0668652718f3977Ca92235fe6bF9c56     # CredentialSync
    cast call ${ARB} "human()(address)"  --rpc-url ${SEPOLIA_RPC_URL}   # = 0x798b01Cef62b889943Ce1D3C5011a755B297e486
    cast call ${ARB} "challengeWindow()(uint32)" --rpc-url ${SEPOLIA_RPC_URL}   # = 120
    cast call ${ESCROW} "arbiter()(address)" --rpc-url ${SEPOLIA_RPC_URL}   # = ARB
-   cast call ${GATE} "verifier()(address)" --rpc-url ${SEPOLIA_RPC_URL}    # = 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa
+   cast call ${GATE} "verifier()(address)" --rpc-url ${SEPOLIA_RPC_URL}    # = WORLD = 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa (see step 0); 0x0000…0000 would mean the gate is open
    ```
 6. **The judge runs.** In `judge/`: `npm ci`. `run.sh` loads the team secrets file (it provides `ZAI_API_KEY`; the script never prints it). Check that `npm run judge -- --input fixtures/damage-admitted.json --provider mock` prints a ruling.
 7. **Allowlist the investor** (share owner = deployer):
@@ -106,7 +120,7 @@ SYNC=0xd0783EC7B0668652718f3977Ca92235fe6bF9c56     # CredentialSync
 | 0:00–0:15 | (any) | app header, footer | One line of pitch: *"Rent held by a contract, not a company."* Scroll to the footer. | Every contract on Sepolia with an explorer link. `RentEscrow` has no owner, no admin and no fee. Its arbiter is the `AIArbiter` contract, and the human gate sits in front of funding. |
 | 0:15–0:35 | alice | **1 Claim your name** | Alice already has her name, so the tab shows her credential. | A card reading *Verified on-chain*: `alice.rentouts.eth` resolves to `0x4848…e936` with credential `tenant/v1`, plus her stats. All of it is read live through the ENSv2 Universal Resolver. Say: *soulbound (ENS refuses the transfer), revocable, and only RentOuts issuers can write `rentouts.*`*. |
 | 0:35–1:00 | **landlord** | **2 Create a lease** | Tenant field: type `alice.rentouts.eth`. Enter the demo terms and click **Create lease**. | *"alice.rentouts.eth resolves to 0x4848…"* and her compact card, then a summary: *the tenant prepays 0.50 USDC*. After the tx: *Lease #N created*. 100 shares of lease #N go to the landlord, and a landlord who isn't allowlisted couldn't list at all. |
-| 1:00–1:20 | **alice** | **3 Fund the lease** | Point at the human-gate notice. Click **Approve 0.50 USDC**, then **Fund lease**. | The notice says only a World ID 4.0 wallet can fund. Alice is that wallet. Her USDC balance drops by 0.50, and *Lease funded. Rent starts unlocking now*. Only the contract can move that money from here on. |
+| 1:00–1:20 | **alice** | **3 Fund the lease** | Point at the human-gate notice. Click **Approve 0.50 USDC**, then **Fund lease**. | The notice says who may fund: only wallets registered in the World ID 4.0 gate (alice passes because she is registered on the live gate; an unregistered wallet sees a red notice and disabled buttons, and `fundLease` would revert `NotVerifiedHuman`). Say: *the escrow never changed; the gate owner plugged World in with one call*. Her USDC balance drops by 0.50, and *Lease funded. Rent starts unlocking now*. Only the contract can move that money from here on. |
 | 1:20–1:45 | **landlord** | **4 Run the lease** | On **Lease A** (term over): click **Release … rent**, then **Close lease**. Then **Sync tenant's credential to ENS**. | Rent goes to the landlord, the deposit goes back to alice, and the state becomes *Closed*. After the sync, which the landlord can pay for because `sync` is permissionless, alice's card shows **Leases completed +1** and more rent paid. |
 | 1:45–2:10 | AI judge | terminal | **Lease B** is disputed, with one statement from each side. Run `./run.sh --lease <B> --propose` and type the judge keystore password. | Within seconds: the model's three answers with their probabilities and a severity, then the rubric arithmetic in code, the proposed `tenantBps`, the model latency, the `rulingHash` and the appeal deadline. Say: *the model answers questions; code computes the split; it's only a proposal*. |
 | 2:10–2:30 | anyone (landlord) | terminal, then app **4 Run the lease** | **Lease C** was proposed minutes ago and nobody appealed: `cast send ${ARB} "execute(uint256)" <C> --account rentouts-deployer --rpc-url ${SEPOLIA_RPC_URL}`. | The lease closes in the app, and each side receives its share of what was left. Say: *either party could have appealed inside the window, and the human arbiter can overrule at any time; the arbiter can only ever pay these two parties*. |
@@ -126,7 +140,7 @@ SYNC=0xd0783EC7B0668652718f3977Ca92235fe6bF9c56     # CredentialSync
 | **Close lease** is disabled | The term isn't over yet. Use Lease A, which was funded ≥ 4 min earlier. Only the landlord can close before `endTime + periodSeconds`. |
 | `createLease` fails with `NotAllowlisted` | The landlord isn't on the share allowlist. Run `setAllowlist(<landlord>, true)` as the share owner, or use the deployer as the landlord. |
 | `createLease` fails with `InvalidTerms` | Check that the period is ≥ 60 s, the tenant isn't the landlord, and neither is the arbiter. |
-| `fundLease` fails with `NotVerifiedHuman` | The World verifier is plugged in and this wallet hasn't passed it. Use a verified tenant, or have the gate owner reopen the gate: `cast send ${GATE} "setVerifier(address)" 0x0000000000000000000000000000000000000000 --account rentouts-deployer --rpc-url ${SEPOLIA_RPC_URL}`. |
+| `fundLease` fails with `NotVerifiedHuman` | The World verifier is plugged in and this wallet isn't registered on it. Check pre-flight step 0 (`verifier()` must be `WORLD`, where alice is registered). Use a registered tenant, or, as a last resort, have the gate owner reopen the gate: `cast send ${GATE} "setVerifier(address)" 0x0000000000000000000000000000000000000000 --account rentouts-deployer --rpc-url ${SEPOLIA_RPC_URL}`. |
 | The judge prints **ABSTAIN, escalated to human arbiter** | That is the safety valve working: say so. It also abstains when only one side has posted, so check that both statements landed. The human arbiter rules instead: `cast send ${ARB} "resolveByHuman(uint256,uint16)" <B> 5000 --account <human arbiter keystore> --rpc-url ${SEPOLIA_RPC_URL}`. |
 | The model API errors or is slow | Re-run with `--provider mock` and say it is the deterministic offline stand-in (keyword matching, not a judge). A mock proposal says so on-chain: its summary starts with `[mock judge, keyword matching]`. |
 | The judge refuses to propose: its key isn't the agent | `cast call ${ARB} "agent()(address)"` must equal the `rentouts-judge` address. The human arbiter can fix it with `setAgent(address)`. |
@@ -191,7 +205,7 @@ cast call ${ARB} "getRuling(uint256)((uint8,uint16,uint16,uint64,uint64,bytes32)
 # inputHash; --onchain also compares the file with AIArbiter.getRuling(leaseId). The arbiter is lowercase in the name:
 npm run judge -- --verify out/ruling-11155111-<aiArbiter>-<leaseId>.json --onchain
 npm run judge -- --verify out/ruling-11155111-0xc3d50752a1f42cc54d3c90a1261779eef5bbdcb5-<leaseId>.json --onchain
-# The human gate: WorldIdV4Gate 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa
+# The human gate: must print WORLD = 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa (the WorldIdV4Gate alice is registered on); 0 would mean open
 cast call $(cast call ${ESCROW} "humanGate()(address)" --rpc-url ${SEPOLIA_RPC_URL}) "verifier()(address)" --rpc-url ${SEPOLIA_RPC_URL}
 ```
 
