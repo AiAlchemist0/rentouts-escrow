@@ -26,7 +26,7 @@ Running, timestamped log of the ENS track (owner: Bektur), updated as we go. Tim
 | Parent records | `addr` = `0x7ed696c879a1a7FD2eD3b49d9982E634a8647eb1` (RentOuts' published address), `url` = `https://rentouts.co`, `email` = `partners@rentouts.co`, `com.twitter` = `RentOuts`, `description` |
 | Machine-readable | [`ens/deployments/sepolia.json`](../../ens/deployments/sepolia.json) |
 | Gate | ✅ **passed Fri 22:24** (`alice.rentouts.eth` resolves `addr` + `rentouts.credential`) |
-| Next | first live `sync` (alice after a demo lease), Etherscan verification (needs an API key), rebuild the hosted app from `main` for the judge-name label |
+| Next | first live `sync` (alice after a demo lease), Etherscan verification (needs an API key) |
 
 ---
 
@@ -238,4 +238,4 @@ Sourcify pages: `https://repo.sourcify.dev/11155111/<address>`. Etherscan needs 
 - [x] World gate: live since Sat 12:09 JST ([`0x56b47b25…43e8ee`](https://sepolia.etherscan.io/tx/0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee)). Since 12:42 JST `HumanGate.verifier` = `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa` ([`0xcd93549e…b86671`](https://sepolia.etherscan.io/tx/0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671)), where alice is registered, so alice can fund (see the Sat 12:42 entry).
 - [x] Top alice up to at least 3.0 test USDC: done Sat 12:56 ([`0xb315f812…a170`](https://sepolia.etherscan.io/tx/0xb315f812ad413cc9b4bd9115b040719bb903303db7e706bcc4c644168515a170)); she holds 3.0.
 - [x] `judge.rentouts.eth` live (Sat 12:47) and `EnsAgentRelay` = `AIArbiter.agent()` (Sat 12:51): ENS gates the AI judge. Never revoke the live name (single-use label).
-- [ ] Rebuild the hosted app (https://rentouts-escrow-demo.dofusd.workers.dev) from `main` so its judge panel shows "Proposed by judge.rentouts.eth ✓".
+- [x] Hosted app (https://rentouts-escrow-demo.dofusd.workers.dev) rebuilt from `main` `c2f2986` on Sat 13:45 JST (Cloudflare Workers static assets, version 78139bab); its judge panel shows "Proposed by judge.rentouts.eth ✓".
