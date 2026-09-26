@@ -135,6 +135,7 @@ flowchart LR
     B --> C["3 bindEscrow<br/>by the human arbiter, once"]
     C --> D["4 CredentialSync<br/>ens.sh credentialSync<br/>plus issuer role cleanup"]
     D --> E["5 World ID<br/>HumanGate.setVerifier<br/>no escrow redeploy"]
+    E --> F["6 judge.rentouts.eth + EnsAgentRelay<br/>AIArbiter.setAgent(relay)<br/>no redeploy"]
 ```
 
 1. **`AIArbiter`** first, because `RentEscrow.arbiter` is immutable. `AI_AGENT` is the address of the new `rentouts-judge` keystore; `AI_HUMAN` defaults to the human arbiter EOA `0x798b…e486`; the challenge window defaults to 120 s for the demo. Recorded under `"sepoliaAIArbiter"` in `deployments.json`.
@@ -142,6 +143,7 @@ flowchart LR
 3. **`bindEscrow(rentEscrow)`**, sent once by the human arbiter. `AIArbiter` refuses an escrow whose arbiter is not itself.
 4. **`CredentialSync`** from `ens/` with `ESCROW_ADDRESS` = the escrow, which makes it a `RentoutsSubnames` issuer. Recorded in `ens/deployments/sepolia.json`. Also broadcast the issuer role cleanup.
 5. **World ID** (done Sat 12:09 JST): `HumanGate.setVerifier(WorldIdV4Gate)` from the deployer. At 12:42 JST a second `setVerifier` pointed it at `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa` (`fund-lease-wallet`), where alice is the verified tenant.
+6. **The AI judge's ENS name** (done Sat 12:47–12:51 JST): the deployer, as a `RentoutsSubnames` issuer, registered `judge.rentouts.eth` to the `rentouts-judge` key, the deployer deployed `EnsAgentRelay` `0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE`, and the human arbiter called `AIArbiter.setAgent(relay)` (block 11783678). Since then only the holder of `judge.rentouts.eth` can propose. Recorded under `"sepoliaEnsAgentRelay"` and in `"sepoliaAIArbiter".agent`. Rollback: `setAgent(<judge key>)` by the human.
 
 Every script dry-runs first. The root scripts record addresses only in a real `--broadcast`, and the ENS phases send nothing unless `BROADCAST=true`.
 
@@ -149,7 +151,7 @@ Every script dry-runs first. The root scripts record addresses only in a real `-
 
 | Track | What we built for it | Where | Status |
 |---|---|---|---|
-| **ENS** | ENSv2 subnames in our own `UserRegistry`. Soulbound through ENS roles, revocable with a record wipe, never expiring. A shared `PermissionedResolver` with **key-scoped** issuer roles (Enhanced Access Control). Reads only through the Universal Resolver. An ENSIP-19 default address record. A credential derived on-chain from the escrow. | [`ens/`](../ens/), the app's identity step | 🟢 live on Sepolia, including `CredentialSync` and the issuer role cleanup |
+| **ENS** | ENSv2 subnames in our own `UserRegistry`. Soulbound through ENS roles, revocable with a record wipe, never expiring. A shared `PermissionedResolver` with **key-scoped** issuer roles (Enhanced Access Control). Reads only through the Universal Resolver. An ENSIP-19 default address record. A credential derived on-chain from the escrow. `judge.rentouts.eth` names the AI judge, and `EnsAgentRelay` (the `AIArbiter` agent) lets only that name's holder propose. | [`ens/`](../ens/), the app's identity step, [`src/EnsAgentRelay.sol`](../src/EnsAgentRelay.sol) | 🟢 live on Sepolia, including `CredentialSync`, the issuer role cleanup, and the ENS-gated AI judge (since Sat 12:51 JST) |
 | **Curvegrid: Best RWA Tokenization Project** | `LeaseShare1155`: ERC-1155 lease shares with compliance-aware transfer logic in `_update` (mint, single and batch). Minted to the allowlisted landlord at `createLease`, so listing is compliance-gated. | [`src/LeaseShare1155.sol`](../src/LeaseShare1155.sol) | 🟢 standalone on Base Sepolia; 🟢 integrated on Ethereum Sepolia (`0x9A9F…1E09`, minter = `RentEscrow`) |
 | **World** | `HumanGate` in `fundLease`: a verified-human check on who may fund a new lease, with a verifier that can be set or swapped without redeploying the escrow. Its verifier is `WorldIdV4Gate` (World ID 4.0, live since Sat 12:09 JST). | [`src/HumanGate.sol`](../src/HumanGate.sol), `WorldIdV4Gate` `0x5Cb8…aABa`, `RentEscrow.fundLease`, the app's fund step | 🟢 live on Sepolia: `HumanGate.verifier` = `WorldIdV4Gate` `0x5Cb8…aABa` since Sat 12:42 JST. Alice verified; other wallets revert `NotVerifiedHuman` |
 | **Continuity** | RentOuts is a live product; everything in this repo was written during the event | [rentouts.co](https://rentouts.co) | n/a |

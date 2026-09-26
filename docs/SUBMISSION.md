@@ -3,21 +3,22 @@
 RentOuts Escrow is the on-chain layer for [RentOuts](https://rentouts.co), a rental marketplace. A contract holds the tenant's USDC deposit and prepaid rent, pays the landlord period by period, and returns the deposit. Neither RentOuts nor the landlord can take the funds.
 
 Around the escrow:
-- **Disputes:** an AI judge can only *propose* a split. A human arbiter has the last word.
+- **Disputes:** an AI judge can only *propose* a split, and only while it holds its ENS name `judge.rentouts.eth`. A human arbiter has the last word.
 - **Identity:** the tenant's track record is derived on-chain and written to a soulbound ENSv2 name.
 - **Access:** World ID 4.0 gates who may fund a lease.
 - **Asset:** each lease is a compliance-gated ERC-1155.
 
-Everything is on **Ethereum Sepolia** (testnet, Circle's test USDC). Start with [README](../README.md) and [ARCHITECTURE](../ARCHITECTURE.md). The demo script is [DEMO.md](./DEMO.md). The demo app runs locally ([app/README.md](../app/README.md)).
+Everything is on **Ethereum Sepolia** (testnet, Circle's test USDC). Start with [README](../README.md) and [ARCHITECTURE](../ARCHITECTURE.md). The demo script is [DEMO.md](./DEMO.md). The demo app is hosted at **[https://rentouts-escrow-demo.dofusd.workers.dev](https://rentouts-escrow-demo.dofusd.workers.dev)** (MetaMask on Sepolia) and also runs locally ([app/README.md](../app/README.md)).
 
 ## Live contracts
 
-Every address below had contract code when we checked on Sat 2026-09-26 at 12:45 JST (`cast code`). Every contract we wrote is source-verified on Sourcify with an `exact_match`, including the Base Sepolia one. The Ethereum Sepolia ones are also verified on Blockscout.
+Every address below had contract code when we checked on Sat 2026-09-26 at 12:45 JST (`cast code`; `EnsAgentRelay` at 13:40 JST). Every contract we wrote is source-verified on Sourcify with an `exact_match`, including the Base Sepolia one. The Ethereum Sepolia ones are also verified on Blockscout.
 
 | Contract | Address (Ethereum Sepolia, 11155111) | What it does |
 | --- | --- | --- |
 | `RentEscrow` | [`0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18`](https://eth-sepolia.blockscout.com/address/0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18) | USDC escrow. Its token, arbiter, lease shares and human gate are fixed at deployment (immutable). |
 | `AIArbiter` | [`0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5`](https://eth-sepolia.blockscout.com/address/0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5) | The escrow's arbiter. AI proposes, 120 s appeal window, human override. |
+| `EnsAgentRelay` | [`0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE`](https://eth-sepolia.blockscout.com/address/0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE) | `AIArbiter.agent()` since Sat 12:51 JST. Forwards AI proposals only from the current holder of `judge.rentouts.eth`. |
 | `HumanGate` | [`0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd`](https://eth-sepolia.blockscout.com/address/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) | Asked by `fundLease`. It forwards the question to its `verifier`. |
 | `WorldIdV4Gate` (live) | [`0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`](https://eth-sepolia.blockscout.com/address/0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa) | The verifier since Sat 12:42 JST: wallets registered after a World ID 4.0 Proof of Human for the `fund-lease-wallet` action. |
 | `WorldIdV4Gate` (superseded) | [`0x27052bD69b3d961940bCD093C21ba729b6c1B209`](https://eth-sepolia.blockscout.com/address/0x27052bD69b3d961940bCD093C21ba729b6c1B209) | Same contract for the `fund-lease` action. It was the verifier from 12:09 to 12:42 JST. No wallet registered on it. |
@@ -37,7 +38,7 @@ The two `WorldIdV4Gate`s run the same code and differ only in the action fixed a
 
 **Machine-readable addresses:** [`deployments.json`](../deployments.json) and [`ens/deployments/sepolia.json`](../ens/deployments/sepolia.json).
 
-### Live state (Sat 2026-09-26, 12:45 JST, block 11783652)
+### Live state (Sat 2026-09-26, 12:45 JST, block 11783652; the AI judge and alice re-read at 13:40 JST)
 
 **World ID is on, through the second gate.**
 - `HumanGate.verifier()` has been `WorldIdV4Gate` `0x5Cb8…aABa` (`fund-lease-wallet`) since tx [`0xcd93549e…eb86671`](https://sepolia.etherscan.io/tx/0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671) (block 11783640, 12:42 JST). The gate owner sent it, and `VerifierUpdated` records the switch from the first gate.
@@ -48,6 +49,14 @@ The two `WorldIdV4Gate`s run the same code and differ only in the action fixed a
 - `alice.rentouts.eth` (`0x4848…e936`) registered on the second gate in tx [`0xdbbfc6dd…148908`](https://sepolia.etherscan.io/tx/0xdbbfc6dd08fdaa4da200b51e6515a7b60423a7c3f94feb06f4a3b28f65148908) (block 11783569, 12:28 JST). It is the gate's only `HumanRegistered` event, so `HumanGate.isVerified` is `true` for her and `false` for everyone else.
 - Any other tenant's `fundLease` reverts `NotVerifiedHuman(tenant)` until that tenant registers through the World ID 4.0 flow.
 - The gate owner can reopen funding with `setVerifier(address(0))`. Leases that are already funded never consult the gate.
+
+**The AI judge is gated by ENS** (read at 13:40 JST).
+- `judge.rentouts.eth` resolves to the judge key `0x4a44…d0dA`. The deployer, a `RentoutsSubnames` issuer, registered it in [`0x5454ab9b…4e73`](https://sepolia.etherscan.io/tx/0x5454ab9bf9e6c62ba94726628daf159fbfd087aa24cdbd39f21718b72e8d4e73) (block 11783660, 12:47 JST), and the judge key set its `description` and `url`.
+- `AIArbiter.agent()` is `EnsAgentRelay` `0xe56E…C3eE`: the human arbiter's `setAgent` in [`0x0fc2c12c…bb44ad`](https://sepolia.etherscan.io/tx/0x0fc2c12c8686c3b24ee9435a560cc9e795ae675eb057095066969b2ce3bb44ad) (block 11783678, 12:51 JST). `relay.judge()` is `0x4a44…d0dA`, the name's holder.
+- So the judge key's direct `AIArbiter.propose` reverts `NotAgent`, any other wallet's `relay.propose` reverts `NotEnsJudge`, and revoking the name would stop AI proposals (the human still rules). The live name is never revoked, because labels are single-use; that case is a fork test.
+- `deployments.json` records it: `sepoliaAIArbiter.agent` is the relay, with `judgeKey`, `judgeName` and `agentSince`, and `sepoliaEnsAgentRelay` has the deploy and `setAgent` txs.
+
+**Alice holds 3.0 test USDC** (1.0 from the deployer at 12:56 JST, [`0xb315f812…a170`](https://sepolia.etherscan.io/tx/0xb315f812ad413cc9b4bd9115b040719bb903303db7e706bcc4c644168515a170), block 11783705), enough for the four demo leases.
 
 **The escrow has no leases yet** (`nextLeaseId() == 1`). `alice.rentouts.eth` resolves. Its escrow-derived records appear after her first lease and a `CredentialSync.sync`.
 
@@ -60,7 +69,12 @@ cast call 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd "isVerified(address)(bool)"
 cast resolve-name alice.rentouts.eth --rpc-url $RPC                                       # 0x4848…e936
 cast call 0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18 "humanGate()(address)" --rpc-url $RPC  # HumanGate
 cast call 0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18 "nextLeaseId()(uint256)" --rpc-url $RPC  # 1 (no leases yet)
+cast call 0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5 "agent()(address)" --rpc-url $RPC      # 0xe56E…C3eE (EnsAgentRelay)
+cast call 0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE "judge()(address)" --rpc-url $RPC      # 0x4a44…d0dA
+cast resolve-name judge.rentouts.eth --rpc-url $RPC                                        # 0x4a44…d0dA
 ```
+
+`cd app && npm run live:smoke` runs all of these checks and more against `deployments.json`.
 
 ## How each sponsor's technology is used
 
@@ -78,7 +92,8 @@ Tenants get a soulbound `<name>.rentouts.eth` whose `rentouts.*` text records ca
   - Registers `rentouts.eth` via commit/reveal.
   - Grants the issuer **key-scoped** resolver roles (`grantSetterRoles`), so it can write `rentouts.onTimeRate` but not `avatar`.
 - Fork tests in [`ens/test/`](../ens/test) run against the live ENSv2 deployment.
-- **Next step, ready to deploy (not live):** [`src/EnsCredentialGate.sol`](../src/EnsCredentialGate.sol) and [`src/AllOfHumanGate.sol`](../src/AllOfHumanGate.sol) would put ENS in the money path too. With `HumanGate.setVerifier(AllOf[WorldIdV4Gate, EnsCredentialGate])`, funding a lease needs a World ID **and** an active `rentouts.eth` name, with no escrow redeploy. A fork test against live Sepolia ([`test/EnsWorldGate.fork.t.sol`](../test/EnsWorldGate.fork.t.sol)) shows alice funding with both, and funding stopping when either is removed. Today the live verifier is still World ID only.
+- **Live: ENS gates the AI judge.** The judge's key holds `judge.rentouts.eth` ([`ens/script/JudgeName.s.sol`](../ens/script/JudgeName.s.sol)), and since Sat 12:51 JST `AIArbiter.agent()` is [`src/EnsAgentRelay.sol`](../src/EnsAgentRelay.sol), which forwards a proposal only if the caller is `RentoutsSubnames.holderOf(judge)` **and** the ENS `UserRegistry` owner of the name. Remove ENS and the AI can't propose. The judge also resolves its own name through the Universal Resolver before signing, and the app labels proposals "Proposed by judge.rentouts.eth ✓". Tests: [`test/EnsAgentRelay.fork.t.sol`](../test/EnsAgentRelay.fork.t.sol) and [`ens/test/JudgeName.fork.t.sol`](../ens/test/JudgeName.fork.t.sol) run against the live relay and name on a fork, including the revoke case.
+- **Next step, ready to deploy (not live):** [`src/EnsCredentialGate.sol`](../src/EnsCredentialGate.sol) and [`src/AllOfHumanGate.sol`](../src/AllOfHumanGate.sol) would put ENS in the funding path too. With `HumanGate.setVerifier(AllOf[WorldIdV4Gate, EnsCredentialGate])`, funding a lease needs a World ID **and** an active `rentouts.eth` name, with no escrow redeploy. A fork test against live Sepolia ([`test/EnsWorldGate.fork.t.sol`](../test/EnsWorldGate.fork.t.sol)) shows alice funding with both, and funding stopping when either is removed. Today the live verifier is still World ID only.
 - The app reads names and records only through the Universal Resolver (`getEnsAddress` / `getEnsText` in [`app/src/hooks.ts`](../app/src/hooks.ts)). A landlord can create a lease for an ENS name.
 
 Details and the trust model are in [ens/README.md](../ens/README.md). The build log with tx hashes is [docs/ens/LOG.md](./ens/LOG.md).
@@ -103,11 +118,12 @@ World ID gates one thing: who may fund a new lease.
 - `RentEscrow.createLease` mints 100 shares to the landlord, so a landlord outside the allowlist can't list a lease.
 - Tests: [`test/LeaseShare1155.t.sol`](../test/LeaseShare1155.t.sol), including a fuzz test that non-allowlisted recipients are always rejected.
 - The standalone Base Sepolia deployment has an on-chain compliance demo: a mint, an allowlisting, an allowlisted transfer, and a non-allowlisted transfer that reverts (README, Curvegrid section).
-- MultiBaas is not used.
+- MultiBaas is not used in this build.
 
 ### AI dispute judge (our own component)
 
-- [`src/AIArbiter.sol`](../src/AIArbiter.sol) holds the proposal. The agent key can only propose. The contract can only split one disputed lease's escrow between that lease's own tenant and landlord.
+- [`src/AIArbiter.sol`](../src/AIArbiter.sol) holds the proposal. The agent can only propose. The contract can only split one disputed lease's escrow between that lease's own tenant and landlord.
+- The agent is [`src/EnsAgentRelay.sol`](../src/EnsAgentRelay.sol) since Sat 12:51 JST, so the judge key proposes only while it holds `judge.rentouts.eth` (see the ENS section). Rollback is the human's `setAgent(<judge key>)`.
 - [`judge/`](../judge/README.md) calls z.ai GLM 5.3 with a fixed checklist. Code computes the split, and the judge abstains to the human when it isn't confident.
 - The judge applies a versioned **Tokyo restoration rules pack** ([`judge/src/rules/tokyo.ts`](../judge/src/rules/tokyo.ts), TKY-1…7, paraphrasing Tokyo Metropolitan Government and MLIT guidance). Code charges the tenant only for items classed as tenant damage, and depreciates wallpaper, carpet and cushion flooring by age. The ruling hash commits to the pack, and the on-chain summary cites the rule ids.
 
@@ -141,8 +157,14 @@ World ID gates one thing: who may fund a new lease.
 | Sat 12:26 | Second `WorldIdV4Gate` (`fund-lease-wallet`) deployed | block 11783562 |
 | Sat 12:28 | `alice.rentouts.eth` registered on the second gate after a World ID 4.0 proof | block 11783569 |
 | Sat 12:38 | AI judge grounded in the Tokyo restoration rules pack | `2364be3` |
+| Sat 12:33–12:41 | `judge.rentouts.eth` script and fork tests, `EnsAgentRelay`, the judge's ENS check, the app's judge-name label | `6840934`, `57c1392`, `e187c53`, `d0cd2ad` |
 | Sat 12:42 | `HumanGate.setVerifier` switched to the second gate | block 11783640 |
+| Sat 12:47 | `judge.rentouts.eth` registered to the AI judge's key | block 11783660 |
+| Sat 12:50 | `EnsAgentRelay` deployed | block 11783676 |
+| Sat 12:51 | `AIArbiter.setAgent(EnsAgentRelay)` by the human arbiter: ENS gates the AI judge | block 11783678 |
+| Sat 12:56 | alice topped up to 3.0 test USDC | block 11783705 |
 | Sat 13:02–13:08 | PRs #14–#16 merged (QA pass, Tokyo rules, combined gate) | merge commits |
+| Sat 13:11–13:14 | PRs #17–#18 merged (submission docs, counts) | merge commits |
 
 Commit rows use git author times and on-chain rows use block times. Branches were rebased before merging, so `git log` order isn't strictly chronological. Squash-merged PRs show their merge time.
 
@@ -151,7 +173,7 @@ Commit rows use git author times and on-chain rows use block times. Branches wer
 | | GitHub | Built |
 | --- | --- | --- |
 | Dean | [@AiAlchemist0](https://github.com/AiAlchemist0) | `LeaseShare1155` and its Base Sepolia deployment; the World ID integration (World Developer Portal app, IDKit and RP-signing flow, `WorldHumanVerifier`, both `WorldIdV4Gate` deployments, alice's registration) |
-| Bektur | [@Apolotary](https://github.com/Apolotary) | `RentEscrow` and `HumanGate`, `AIArbiter` and the judge service (including the Tokyo rules pack), the ENS package, the World ID AND ENS combined gate, the demo app, the Ethereum Sepolia deployments and both `setVerifier` switches |
+| Bektur | [@Apolotary](https://github.com/Apolotary) | `RentEscrow` and `HumanGate`, `AIArbiter` and the judge service (including the Tokyo rules pack), the ENS package, `judge.rentouts.eth` and `EnsAgentRelay`, the World ID AND ENS combined gate, the demo app, the Ethereum Sepolia deployments and both `setVerifier` switches |
 
 ## More
 
