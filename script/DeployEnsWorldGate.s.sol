@@ -24,7 +24,7 @@ interface IHumanGateAdmin {
 ///
 ///   Env (all optional; defaults are the live Sepolia deployment):
 ///     WORLD_GATE    WorldIdV4Gate #2 (action fund-lease-wallet; HumanGate's verifier since tx
-///                   0xcd93549e…6b71, block 11783640; alice.rentouts.eth is registered on it)
+///                   0xcd93549e…b86671, block 11783640; alice.rentouts.eth is registered on it)
 ///                                      default 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa
 ///                   (gate #1 0x27052bD6…B209, action fund-lease, is superseded: do not use it)
 ///     ENS_SUBNAMES  RentoutsSubnames   default 0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60

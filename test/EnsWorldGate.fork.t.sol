@@ -44,7 +44,7 @@ contract EnsWorldGateForkTest is Test {
     address constant RENT_ESCROW = 0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18;
     address constant HUMAN_GATE = 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd;
     /// @dev WorldIdV4Gate #2, action `fund-lease-wallet`: HumanGate's live verifier since tx
-    ///      0xcd93549e…6b71 (block 11783640). It replaced gate #1 0x27052bD6…B209 (action `fund-lease`,
+    ///      0xcd93549e…b86671 (block 11783640). It replaced gate #1 0x27052bD6…B209 (action `fund-lease`,
     ///      0 registrations).
     address constant WORLD_GATE = 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa;
     address constant WORLD_RP_SIGNER = 0xbb80c666Ed8E8B5ec45481f911c7a892f8A842CA;
