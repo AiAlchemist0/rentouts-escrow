@@ -11,6 +11,7 @@ import { loadDisputeInput, NotDisputedError, type ArbiterState } from './chain.t
 import { abstainWithoutModel, confidenceBasis, decide, type Decision } from './decide.ts'
 import { createProvider, isProviderName, PROVIDERS } from './providers/index.ts'
 import { EXIT_STANDING_PROPOSAL, MOCK_SUMMARY_PREFIX, planProposal, sendProposal } from './propose.ts'
+import { TOKYO_RULES_REF } from './rules/tokyo.ts'
 import { proposedPath, recordPath, verifyOnchain, verifySaved, writeRecord, type SavedRuling } from './record.ts'
 import type { Address, DisputeInput } from './types.ts'
 
@@ -107,6 +108,12 @@ function report(input: DisputeInput, d: Decision, meta: { provider: string; mode
       `    severity                      ${a.severity}/5`,
       `  rationale     ${a.rationale}`,
     )
+    if (a.rules?.length) lines.push(`  rules cited   ${a.rules.join(', ')}`)
+  }
+  if (r.rules) lines.push(`  rules pack    ${r.rules.id} v${r.rules.version} (${r.rules.hash})`)
+  for (const i of r.rubric?.items ?? []) {
+    const life = i.usefulLifeYears === null ? 'not depreciated' : `age ${i.ageYears} of ${i.usefulLifeYears} y -> tenant share ${pct(i.tenantShareBps)}`
+    lines.push(`  item          ${i.item} [${i.material}] ${i.cause}, severity ${i.severity}/5, ${life}: charge ${amt(i.charge)}`)
   }
   if (r.rubric) {
     lines.push(
@@ -209,7 +216,7 @@ async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<number> {
     const result = await provider.judge(input)
     const latencyMs = Math.round(performance.now() - t0)
     meta = { provider: provider.name, model: result.model, attempts: result.attempts, latencyMs, notes: result.notes }
-    decision = decide(input, result.answers, { provider: provider.name, model: result.model }, minConfidence)
+    decision = decide(input, result.answers, { provider: provider.name, model: result.model }, minConfidence, { rules: TOKYO_RULES_REF })
   }
 
   for (const line of report(input, decision, meta, arbiterState)) say(line)

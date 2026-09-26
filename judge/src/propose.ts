@@ -33,9 +33,13 @@ export const MOCK_SUMMARY_PREFIX = '[mock judge, keyword matching] '
  * The `summary` sent with AIArbiter.propose: the rationale, cut to MAX_SUMMARY_BYTES. A mock ruling
  * is labelled, because the Proposed event carries no provider (only the ruling file and its hash do).
  */
-export function proposalSummary(ruling: Pick<Ruling, 'judge' | 'answers'>): string {
+export function proposalSummary(ruling: Pick<Ruling, 'judge' | 'answers'> & Partial<Pick<Ruling, 'rules'>>): string {
   const prefix = ruling.judge.provider === 'mock' ? MOCK_SUMMARY_PREFIX : ''
-  return prefix + truncateUtf8(ruling.answers?.rationale ?? '', MAX_SUMMARY_BYTES - new TextEncoder().encode(prefix).length)
+  const cited = ruling.answers?.rules ?? []
+  // The rule ids the answers rest on, so the Proposed event (and the app) shows what was applied.
+  const suffix = cited.length > 0 ? ` [${ruling.rules ? `${ruling.rules.id} v${ruling.rules.version}` : 'rules'}: ${cited.join(', ')}]` : ''
+  const room = MAX_SUMMARY_BYTES - new TextEncoder().encode(prefix + suffix).length
+  return prefix + truncateUtf8(ruling.answers?.rationale ?? '', room) + suffix
 }
 
 /** Exit code when the judge abstains but an earlier AI proposal on the lease still stands. */

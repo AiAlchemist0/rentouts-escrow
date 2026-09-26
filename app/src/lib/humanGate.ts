@@ -1,6 +1,6 @@
 import type { Address } from 'viem'
 
-export const HUMAN_GATE_TITLE = 'Human verification required (World ID — coming soon)'
+export const HUMAN_GATE_TITLE = 'Human verification required (World ID)'
 
 /** What the app knows about RentEscrow.humanGate() for the connected tenant. */
 export type HumanGateView = {
@@ -10,6 +10,8 @@ export type HumanGateView = {
   verified?: boolean
   /** HumanGate.verifier() == address(0), so every account passes; undefined if unknown. */
   open?: boolean
+  /** HumanGate.verifier() when it is set (the World ID 4.0 gate, WorldIdV4Gate); undefined if open or unknown. */
+  verifier?: Address
 }
 
 export type HumanGateNotice = {
@@ -34,11 +36,11 @@ export function humanGateNotice({ gate, verified, open }: HumanGateView): HumanG
   if (verified === false) {
     return notice(
       'error',
-      'This wallet hasn’t passed it, so funding would revert. Verifying with World ID isn’t in this demo yet.',
+      'This wallet hasn’t passed it, so funding would revert. To pass, prove you’re human with World ID 4.0 (World App, Proof of Human) with this wallet’s address as the signal. The RentOuts RP then registers the wallet in the World ID gate: one World ID, one wallet. This page re-checks every few seconds.',
       true,
     )
   }
-  if (open) return notice('info', 'No verifier is plugged in on this testnet deployment yet, so every wallet passes for now.')
-  if (verified) return notice('info', 'This wallet passes it.')
+  if (open) return notice('info', 'No verifier is plugged in on this deployment, so every wallet passes for now.')
+  if (verified) return notice('info', 'This wallet passes it: it is registered in the World ID 4.0 gate.')
   return notice('info', 'Funding reverts for a wallet that doesn’t pass it.')
 }
