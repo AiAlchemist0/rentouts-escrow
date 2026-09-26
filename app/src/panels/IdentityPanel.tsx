@@ -78,7 +78,7 @@ function ClaimForm({ account, parent }: { account: Address; parent: string }) {
       <h2>Claim your tenant name</h2>
       <p className="lede">
         A soulbound ENS subname on the ENSv2 beta. It can’t be transferred, and it carries your rental track record as
-        text records that only RentOuts can write.
+        text records that only Dignity can write.
       </p>
       <Field label="Name" htmlFor="claim-label">
         <div className="name-input">
@@ -159,7 +159,7 @@ export function IdentityPanel() {
   const parent = useParentName()
   const myName = useRentoutsName(address)
 
-  if (!parent) return <p className="hint">Reading the RentOuts ENS registry…</p>
+  if (!parent) return <p className="hint">Reading the Dignity ENS registry…</p>
 
   return (
     <div className="stack">

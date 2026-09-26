@@ -15,13 +15,13 @@ export function evaluateCredential(input: {
   expectedHolder: Address | null
 }): Trust {
   const { address, status, expectedHolder } = input
-  if (status === 'revoked') return { verified: false, reason: 'This credential was revoked by RentOuts.' }
+  if (status === 'revoked') return { verified: false, reason: 'This credential was revoked by Dignity.' }
   if (!address) return { verified: false, reason: 'This name doesn’t resolve to an address.' }
-  if (!expectedHolder) return { verified: false, reason: 'RentOuts has no holder on record for this name.' }
+  if (!expectedHolder) return { verified: false, reason: 'Dignity has no holder on record for this name.' }
   if (!isAddressEqual(address, expectedHolder)) {
-    return { verified: false, reason: 'The name resolves to a different address than its RentOuts holder.' }
+    return { verified: false, reason: 'The name resolves to a different address than its Dignity holder.' }
   }
-  if (status !== 'active') return { verified: false, reason: 'This name has no active RentOuts credential.' }
+  if (status !== 'active') return { verified: false, reason: 'This name has no active Dignity credential.' }
   return { verified: true }
 }
 

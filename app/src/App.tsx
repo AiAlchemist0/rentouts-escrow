@@ -105,7 +105,7 @@ function Footer() {
           <ContractRow name="ENS Universal Resolver" address={ENS.universalResolver} />
         </dl>
         <p className="footer-note">
-          Testnet demo for ETHGlobal Tokyo 2026. Test USDC only, no real funds. Source:{' '}
+          Dignity (formerly RentOuts) is a testnet demo for ETHGlobal Tokyo 2026. Test USDC only, no real funds. Source:{' '}
           <ExtLink href="https://github.com/AiAlchemist0/rentouts-escrow">github.com/AiAlchemist0/rentouts-escrow</ExtLink>{' '}
           (MIT).
         </p>
@@ -127,7 +127,7 @@ export function App() {
         <section className="hero">
           <h1>Rent held by a contract, not a company.</h1>
           <p>
-            Tenants prepay deposit and rent into an escrow on Ethereum Sepolia. Rent unlocks to the landlord period by
+            With Dignity, tenants prepay deposit and rent into an escrow on Ethereum Sepolia. Rent unlocks to the landlord period by
             period, the deposit comes back at the end, and each finished lease adds to the tenant’s portable ENS
             credential.
           </p>

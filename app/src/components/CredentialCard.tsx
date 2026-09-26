@@ -93,7 +93,7 @@ export function CredentialCard({ name, compact = false }: { name: string; compac
   return (
     <article className={`pass${trust.verified ? ' pass-verified' : ''}${compact ? ' pass-compact' : ''}`}>
       <div className="pass-top">
-        <span className="pass-kind">RentOuts tenant credential on ENS</span>
+        <span className="pass-kind">Dignity tenant credential on ENS</span>
         <span className={`seal ${trust.verified ? 'seal-ok' : 'seal-warn'}`}>
           {trust.verified ? 'Verified on-chain' : status === 'revoked' ? 'Revoked' : 'Not verified'}
         </span>
