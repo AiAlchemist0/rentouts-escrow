@@ -364,7 +364,7 @@ cd judge && npm ci && npx vitest run
 
 Expected: **202 passing** Foundry tests in 16 suites: 12 `LeaseShare1155`, 53 `RentEscrow` unit/fuzz (4 of them with a blacklisting token), 16 `HumanGate`, 6 + 12 `WorldIdV4Gate`, 8 `WorldHumanVerifier` (deprecated 3.0 path), 15 `DeployEscrow`, 34 `AIArbiter`, 5 `DeployAIArbiter`, 31 World + ENS combined-gate unit tests (14 `AllOfHumanGate`, 15 `EnsCredentialGate`, 2 `DeployEnsWorldGate`) and 8 `EnsWorldGate` fork tests against live Sepolia (need network), plus the `RentEscrow` and `AIArbiter` invariant suites, which forge counts as one test each. The `LeaseShare1155` tests cover mint/transfer/batch allowlist gating, revoke-mid-life, access control, and `testFuzz_TransferToRandom_RejectedUnlessAllowlisted` (256 runs) proving the compliance gate.
 
-The judge: **92 passing** vitest tests in 12 files. One of them reads a throwaway keystore made by `cast wallet new`, so it is skipped when `cast` is not on PATH (91 passed, 1 skipped).
+The judge: **109 passing** vitest tests in 13 files. One of them reads a throwaway keystore made by `cast wallet new`, so it is skipped when `cast` is not on PATH (108 passed, 1 skipped).
 
 ### Deploy to Base Sepolia
 
