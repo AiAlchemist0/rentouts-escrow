@@ -5,6 +5,7 @@ import { sepolia } from 'viem/chains'
 import { aiArbiterAbi } from './abi.ts'
 import type { ArbiterState } from './chain.ts'
 import type { Decision, Ruling } from './decide.ts'
+import { DEFAULT_JUDGE_ENS_NAME, ensAgentRelayAbi, proposalTarget } from './ens.ts'
 import { decryptKeystore, keystorePath, promptHidden, KeystoreError } from './keystore.ts'
 import type { Address, Hex } from './types.ts'
 
@@ -102,7 +103,12 @@ export interface ProposeOptions {
   arbiter: Address
   leaseId: bigint
   decision: Decision
+  /** AIArbiter.agent(), read on chain: the judge key, or the EnsAgentRelay. */
   expectedAgent: Address
+  /** JUDGE_RELAY: send through this EnsAgentRelay instead of calling AIArbiter directly. */
+  relay?: Address | null
+  /** JUDGE_ENS_NAME (default judge.rentouts.eth); null = the ENS check is off. */
+  ensName?: string | null
   keystore: string
   /** Directory holding the keystore (JUDGE_KEYSTORE_DIR); default ~/.foundry/keystores. */
   keystoreDir?: string
@@ -113,7 +119,9 @@ export interface ProposeOptions {
 
 /**
  * Sends AIArbiter.propose(leaseId, tenantBps, rulingHash, confidenceBps, summary), signed with the
- * judge's Foundry keystore. Simulates first so a revert (not the agent, window over, appealed...)
+ * judge's Foundry keystore, directly or through the EnsAgentRelay (JUDGE_RELAY). Before signing it checks
+ * the judge's ENS name (src/ens.ts proposalTarget): the name must resolve to this key, and this key must be
+ * the one AIArbiter lets propose. Simulates first so a revert (not the agent, window over, appealed...)
  * is reported before anything is sent.
  */
 export async function sendProposal(opts: ProposeOptions): Promise<{ txHash: Hex; deadline: bigint | null }> {
@@ -129,21 +137,29 @@ export async function sendProposal(opts: ProposeOptions): Promise<{ txHash: Hex;
   }
   const password = opts.password ?? (await promptHidden(`Password for keystore "${opts.keystore}": `))
   const account = privateKeyToAccount(decryptKeystore(json, password))
-  if (!isAddressEqual(account.address, opts.expectedAgent)) {
+  if (!opts.relay && !isAddressEqual(account.address, opts.expectedAgent)) {
     throw new Error(`keystore "${opts.keystore}" is ${account.address}, but AIArbiter's agent is ${opts.expectedAgent}`)
   }
+  const target = await proposalTarget(opts.publicClient, {
+    signer: account.address,
+    agent: opts.expectedAgent,
+    arbiter: opts.arbiter,
+    relay: opts.relay ?? null,
+    ensName: opts.ensName === undefined ? DEFAULT_JUDGE_ENS_NAME : opts.ensName,
+  })
+  for (const line of target.lines) opts.log(line)
 
   const summary = proposalSummary(ruling)
   const { request } = await opts.publicClient.simulateContract({
     account,
-    address: opts.arbiter,
-    abi: aiArbiterAbi,
+    address: target.address,
+    abi: target.via === 'relay' ? ensAgentRelayAbi : aiArbiterAbi,
     functionName: 'propose',
     args: [opts.leaseId, ruling.tenantBps, rulingHash, ruling.confidenceBps, summary],
   })
   const wallet = createWalletClient({ account, chain: sepolia, transport: http(opts.rpcUrl) })
-  const txHash = await wallet.writeContract(request)
-  opts.log(`  sent          ${txHash} (waiting for the receipt)`)
+  const txHash = await wallet.writeContract(request as never)
+  opts.log(`  sent          ${txHash}${target.via === 'relay' ? ` via EnsAgentRelay ${target.address}` : ''} (waiting for the receipt)`)
   const receipt = await opts.publicClient.waitForTransactionReceipt({ hash: txHash })
   if (receipt.status !== 'success') throw new Error(`propose reverted in ${txHash}`)
   const [proposed] = parseEventLogs({ abi: aiArbiterAbi, eventName: 'Proposed', logs: receipt.logs })

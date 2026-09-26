@@ -59,6 +59,8 @@ Every run prints the lease, the answers, the rubric arithmetic, the decision, th
 | `JUDGE_KEYSTORE` | `rentouts-judge` | Foundry keystore name, in `~/.foundry/keystores/` (`JUDGE_KEYSTORE_DIR` to change) |
 | `JUDGE_KEYSTORE_PASSWORD` | (hidden prompt) | only for non-interactive runs |
 | `AI_ARBITER`, `SEPOLIA_RPC_URL`, `JUDGE_FROM_BLOCK` | | see flags |
+| `JUDGE_ENS_NAME` | `judge.rentouts.eth` | the judge's ENS name. `--propose` refuses unless it resolves to the signing key and that key is the one AIArbiter lets propose (see *The judge's ENS name*). `off` disables the check, e.g. for local mock runs |
+| `JUDGE_RELAY` | (none) | send through this `EnsAgentRelay` (`../src/EnsAgentRelay.sol`) once the human has made it AIArbiter's agent |
 
 The judge key is an ordinary Foundry keystore: `cast wallet import rentouts-judge --interactive`. Its address is AIArbiter's `agent`, and it needs a little Sepolia ETH for gas. The key is decrypted in memory for one transaction and never logged.
 
@@ -118,6 +120,15 @@ cast send <aiArbiter> "resolveByHuman(uint256,uint16)" 1 5000 --account <human> 
 4. **Commit** (`src/canonical.ts`). The ruling is canonical JSON with sorted keys and no whitespace. It holds the chain, escrow, arbiter and lease, the `inputHash` of everything read (facts and every statement), the provider and model, the answers, the rubric arithmetic, the confidence and threshold, and the decision. It contains no timestamps, so it is reproducible. `rulingHash = keccak256(canonical JSON)` goes on-chain with the proposal, and anyone holding the saved file can check it with `--verify` (add `--onchain` to compare it with the proposal on Sepolia).
 5. **Propose** (`src/propose.ts`). The judge decrypts the keystore (Web3 Secret Storage v3, the format `cast` writes), checks that its address is AIArbiter's `agent`, simulates, then sends `propose(leaseId, tenantBps, rulingHash, confidenceBps, summary)`. The summary is the rationale, cut to 1000 bytes. If the lease has already been appealed, or the open proposal's window is over, it refuses before signing. The agent can only propose, never withdraw: if a rerun (say, after new evidence) abstains while an earlier proposal is still open, that proposal still executes at its deadline. The CLI then prints a WARNING with the open split and deadline instead of "the human arbiter decides", and `--propose` exits **3**. Stopping it takes an appeal by a party or `resolveByHuman`.
 
+### The judge's ENS name
+
+The judge key has an ENS name, `judge.rentouts.eth` (issued by RentoutsSubnames, soulbound; see `ens/README.md`). It is part of how a proposal gets out, not a label:
+
+- **Off-chain, every `--propose`** (`src/ens.ts`): after decrypting the key and before simulating, the judge resolves `JUDGE_ENS_NAME` through the ENSv2 Universal Resolver. It refuses to send unless the name resolves to the signing key **and** that key is the one AIArbiter lets propose: `AIArbiter.agent()` itself, or, with `JUDGE_RELAY`, the relay's `judge()` while `AIArbiter.agent()` is the relay. An unregistered or revoked name, or one pointing at another key, stops the proposal. Every live run also prints a read-only `judge ENS` line saying whether `--propose` would pass.
+- **On-chain, with the relay**: the human can make `EnsAgentRelay` AIArbiter's agent (`setAgent`, no redeploy). The relay forwards `propose` only from the current holder of `judge.rentouts.eth` (RentoutsSubnames `holderOf` and the ENS registry owner). Revoking the name stops the AI at once; the judge key can no longer call AIArbiter directly. Rollback: the human calls `setAgent(<judge key>)`.
+
+`JUDGE_ENS_NAME=off` skips the lookup (the agent check stays), for local runs against a chain without the name.
+
 ### Evidence is attacker-controlled
 
 Both parties write the evidence, and both want the money. The main risk is a plain false statement ("the tenant already agreed in writing to forfeit the deposit"), not a blunt "ignore previous instructions". So:
@@ -145,7 +156,7 @@ What the contracts guarantee whatever the model says: AIArbiter's only state-cha
 
 ```bash
 npx tsc --noEmit
-npx vitest run      # 92 tests; the cast keystore cross-check runs when `cast` is on PATH
+npx vitest run      # 106 tests; the cast keystore cross-check runs when `cast` is on PATH
 ```
 
 The tests cover:
@@ -159,6 +170,7 @@ The tests cover:
 - saved rulings: hash-named records, `--verify` catching edited input, and `--onchain` against a stubbed client;
 - what `--propose` does over an open proposal (including the exit code 3 warning when the judge abstains), and the mock label on-chain;
 - keystore decryption (including a keystore written by `cast wallet new`);
+- the ENS gate (`test/ens.test.ts`, mock resolver): the name must resolve to the signer and to AIArbiter's agent (or the relay's judge), `JUDGE_ENS_NAME=off`, and `JUDGE_RELAY`;
 - lease-fact arithmetic;
 - the CLI end to end on the fixtures.
 

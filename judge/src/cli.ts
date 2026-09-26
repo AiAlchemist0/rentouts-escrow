@@ -9,6 +9,7 @@ import { sepolia } from 'viem/chains'
 import { canonicalJson } from './canonical.ts'
 import { loadDisputeInput, NotDisputedError, type ArbiterState } from './chain.ts'
 import { abstainWithoutModel, confidenceBasis, decide, type Decision } from './decide.ts'
+import { JudgeEnsError, judgeEnsNameFromEnv, judgeRelayFromEnv, previewJudgeEns } from './ens.ts'
 import { createProvider, isProviderName, PROVIDERS } from './providers/index.ts'
 import { EXIT_STANDING_PROPOSAL, MOCK_SUMMARY_PREFIX, planProposal, sendProposal } from './propose.ts'
 import { proposedPath, recordPath, verifyOnchain, verifySaved, writeRecord, type SavedRuling } from './record.ts'
@@ -43,7 +44,10 @@ const USAGE = `RentOuts AI dispute judge
 
   env: ZAI_API_KEY ZAI_BASE_URL ZAI_MODEL JUDGE_REASONING_EFFORT JUDGE_MAX_TOKENS
        JUDGE_MIN_CONFIDENCE (default 0.7) JUDGE_KEYSTORE (default rentouts-judge) JUDGE_KEYSTORE_DIR
-       JUDGE_KEYSTORE_PASSWORD (else a hidden prompt) JUDGE_FROM_BLOCK AI_ARBITER SEPOLIA_RPC_URL`
+       JUDGE_KEYSTORE_PASSWORD (else a hidden prompt) JUDGE_FROM_BLOCK AI_ARBITER SEPOLIA_RPC_URL
+       JUDGE_ENS_NAME (default judge.rentouts.eth; --propose refuses unless it resolves to the signing key
+         and that key is the one AIArbiter lets propose; "off" disables the check for local mock runs)
+       JUDGE_RELAY (send through this EnsAgentRelay, when the human made it AIArbiter's agent)`
 
 class UsageError extends Error {}
 
@@ -173,6 +177,14 @@ async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<number> {
   }
 
   const rpcUrl = values.rpc || env.SEPOLIA_RPC_URL || DEFAULT_RPC
+  let ensName: string | null
+  let relay: ReturnType<typeof judgeRelayFromEnv>
+  try {
+    ensName = judgeEnsNameFromEnv(env)
+    relay = judgeRelayFromEnv(env)
+  } catch (err) {
+    throw new UsageError((err as Error).message)
+  }
   const record = deploymentsRecord()
   let input: DisputeInput
   let arbiterState: ArbiterState | null = null
@@ -213,6 +225,7 @@ async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<number> {
   }
 
   for (const line of report(input, decision, meta, arbiterState)) say(line)
+  if (client && arbiterState) say(await previewJudgeEns(client as never, { ensName, agent: arbiterState.agent, relay }))
 
   // Saved before anything is sent, under a name that holds the hash: the preimage of a rulingHash
   // that goes on-chain is never overwritten by a later run.
@@ -236,6 +249,8 @@ async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<number> {
     leaseId: BigInt(input.lease.leaseId),
     decision,
     expectedAgent: arbiterState!.agent,
+    relay,
+    ensName,
     keystore: env.JUDGE_KEYSTORE || 'rentouts-judge',
     keystoreDir: env.JUDGE_KEYSTORE_DIR || undefined,
     password: env.JUDGE_KEYSTORE_PASSWORD || undefined,
@@ -257,6 +272,10 @@ main(process.argv.slice(2), process.env).then(
     if (err instanceof UsageError) {
       console.error(`error: ${err.message}\n\n${USAGE}`)
       process.exit(2)
+    }
+    if (err instanceof JudgeEnsError) {
+      console.error(`refused: ${err.message}`)
+      process.exit(1)
     }
     if (err instanceof NotDisputedError) {
       console.error(`nothing to judge: ${err.message}`)
