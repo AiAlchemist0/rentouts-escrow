@@ -24,16 +24,21 @@ interface ILiveShares {
     function setAllowlist(address account, bool allowed) external;
 }
 
-/// @notice The whole ENS-gated judge against the LIVE Sepolia contracts on a fork: register
-///         judge.rentouts.eth to the judge key on the real RentoutsSubnames, deploy the relay with its
-///         deploy script, the human makes it AIArbiter's agent, and a real lease on the real RentEscrow goes
-///         to dispute and gets an AI proposal through the relay. Non-holders are refused, and revoking the
-///         name stops the AI. Nothing is broadcast.
+/// @notice The ENS-gated judge as it is LIVE on Sepolia, exercised on a fork. judge.rentouts.eth is held by
+///         the judge key 0x4a44…d0dA (register tx 0x5454ab9b…4e73, block 11783660), the EnsAgentRelay
+///         0xe56E…C3eE is deployed (block 11783676) and the human made it AIArbiter's agent (setAgent tx
+///         0x0fc2c12c…44ad, block 11783678). A real lease on the real RentEscrow goes to dispute and gets an AI
+///         proposal through the LIVE relay; non-holders and the direct call are refused; revoking the name
+///         (on the fork only: labels are single-use) stops the AI; rollback is setAgent(judge key). The
+///         deploy script still builds a relay with the live relay's exact runtime code. Nothing is broadcast.
+///         If the human has rolled back (agent() = judge key), _switchOn re-applies setAgent(relay) on the fork.
 ///         Run: forge test --match-path test/EnsAgentRelay.fork.t.sol -vv
 contract EnsAgentRelayForkTest is Test {
     AIArbiter constant ARB = AIArbiter(0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5);
     ILiveSubnames constant SUBNAMES = ILiveSubnames(0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60);
     address constant DEPLOYER = 0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE; // subnames admin/issuer, gate + shares owner
+    address constant JUDGE_KEY = 0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA; // keystore rentouts-judge
+    EnsAgentRelay constant LIVE_RELAY = EnsAgentRelay(0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE);
     bytes32 constant HASH = keccak256("canonical ruling json");
 
     RentEscrow escrow;
@@ -49,18 +54,14 @@ contract EnsAgentRelayForkTest is Test {
         vm.createSelectFork(vm.envOr("SEPOLIA_RPC_URL", string("https://ethereum-sepolia-rpc.publicnode.com")));
         escrow = RentEscrow(address(ARB.escrow()));
         usdc = IERC20(address(escrow.token()));
-        judgeKey = ARB.agent();
+        relay = LIVE_RELAY;
+        judgeKey = JUDGE_KEY;
         human = ARB.human();
-        require(judgeKey.code.length == 0, "fork: AIArbiter.agent() is not the judge EOA any more (relay already on?)");
-
-        // judge.rentouts.eth -> the judge key, by the issuer (what ens/script/JudgeName.s.sol registerJudge does).
-        vm.prank(DEPLOYER);
-        SUBNAMES.register("judge", judgeKey);
+        require(address(relay).code.length != 0, "fork: no EnsAgentRelay at the recorded address");
+        address agent = ARB.agent();
+        require(agent == address(relay) || agent == judgeKey, "fork: AIArbiter.agent() is neither the relay nor the judge key");
+        require(relay.judge() == judgeKey, "fork: judge.rentouts.eth is not held by the judge key");
         assertEq(SUBNAMES.nameOf(judgeKey), "judge.rentouts.eth");
-
-        // The relay, deployed by its own deploy script.
-        DeployEnsAgentRelay deployScript = new DeployEnsAgentRelay();
-        relay = deployScript.deploy(DEPLOYER, address(ARB), address(SUBNAMES), "judge");
 
         // A real lease on the live escrow: open the World ID gate and allowlist the landlord (both owned
         // by the deployer), fund the tenant with Sepolia USDC.
@@ -84,7 +85,9 @@ contract EnsAgentRelayForkTest is Test {
         vm.stopPrank();
     }
 
+    /// @dev Live since block 11783678; re-applied on the fork only if the human has rolled back since.
     function _switchOn() internal {
+        if (ARB.agent() == address(relay)) return;
         vm.prank(human);
         ARB.setAgent(address(relay));
     }
@@ -92,8 +95,28 @@ contract EnsAgentRelayForkTest is Test {
     function test_RelayWiring() public {
         assertEq(address(relay.arbiter()), address(ARB));
         assertEq(address(relay.subnames()), address(SUBNAMES));
+        assertEq(relay.label(), "judge");
+        assertEq(relay.labelId(), uint256(keccak256("judge")));
         assertEq(relay.name(), "judge.rentouts.eth");
-        assertEq(relay.judge(), judgeKey, "the ENS judge is AIArbiter's current agent");
+        assertEq(relay.judge(), judgeKey, "the ENS judge is the judge key");
+        assertTrue(relay.isJudge(judgeKey));
+        assertFalse(relay.isJudge(DEPLOYER));
+        assertFalse(relay.isJudge(address(0)));
+    }
+
+    /// The recorded live state (deployments.json "sepoliaAIArbiter.agent" / "sepoliaEnsAgentRelay").
+    function test_LiveAgentIsTheRelay() public {
+        assertEq(ARB.agent(), address(relay), "AIArbiter.agent() is the EnsAgentRelay since block 11783678");
+    }
+
+    /// The deploy script builds a relay whose runtime code is byte-identical to the live one (no drift
+    /// between src/EnsAgentRelay.sol and what is on Sepolia), and which names the same judge.
+    function test_DeployScriptMatchesTheLiveRelay() public {
+        DeployEnsAgentRelay deployScript = new DeployEnsAgentRelay();
+        EnsAgentRelay fresh = deployScript.deploy(DEPLOYER, address(ARB), address(SUBNAMES), "judge");
+        assertEq(address(fresh).code, address(relay).code, "runtime code == live relay");
+        assertEq(fresh.judge(), judgeKey);
+        assertEq(fresh.name(), relay.name());
     }
 
     function test_EnsJudgeProposesThroughRelay() public {
@@ -128,6 +151,7 @@ contract EnsAgentRelayForkTest is Test {
         ARB.propose(id, 7500, HASH, 8500, "");
     }
 
+    /// FORK ONLY: the live name is never revoked (labels are single-use in RentoutsSubnames).
     function test_RevokingTheNameStopsTheAI() public {
         uint256 id = _disputedLease();
         _switchOn();
@@ -143,6 +167,7 @@ contract EnsAgentRelayForkTest is Test {
         assertEq(uint8(ARB.getRuling(id).status), uint8(AIArbiter.Status.HUMAN_RESOLVED));
     }
 
+    /// Rollback, as ../sign-judge-name.sh rollback sends it: the human's setAgent(judge key).
     function test_RollbackToTheJudgeEoa() public {
         uint256 id = _disputedLease();
         _switchOn();

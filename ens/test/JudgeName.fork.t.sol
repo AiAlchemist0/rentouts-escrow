@@ -58,21 +58,40 @@ contract JudgeNameHarness is JudgeName {
     }
 }
 
-/// @notice judge.rentouts.eth against the LIVE Sepolia deployment on a fork: the real RentoutsSubnames,
-///         registry, resolver, AIArbiter and Universal Resolver. The script's phases run as the deployer
-///         (issuer) and then as the judge key, exactly as sign-judge-name.sh sends them. Nothing is broadcast.
+/// @dev The live EnsAgentRelay's views (src/EnsAgentRelay.sol in the root project).
+interface IJudgeRelayView {
+    function judge() external view returns (address);
+    function name() external view returns (string memory);
+}
+
+interface IAIArbiterAdmin {
+    function human() external view returns (address);
+    function setAgent(address newAgent) external;
+}
+
+/// @notice judge.rentouts.eth as it is LIVE on Sepolia, checked on a fork: the real RentoutsSubnames,
+///         registry, resolver, AIArbiter, EnsAgentRelay and Universal Resolver. Since Sat 12:47 JST the
+///         name is held by the judge key 0x4a44…d0dA (register tx 0x5454ab9b…4e73, block 11783660; the
+///         judge key set description + url in blocks 11783662-3), and since 12:51 JST AIArbiter.agent() is
+///         the EnsAgentRelay 0xe56E…C3eE (setAgent tx 0x0fc2c12c…44ad, block 11783678), which forwards
+///         proposals only for the name's holder. Labels are single-use, so the live name is never revoked:
+///         the revoke case runs on the fork only. The pre-broadcast rehearsal of registerJudge /
+///         judgeProfile on a fresh label is in docs/ens/LOG.md (Sat 12:44). Nothing is broadcast.
 ///         Run: forge test --match-path test/JudgeName.fork.t.sol -vv
 contract JudgeNameForkTest is Test {
     using stdJson for string;
 
     string constant NAME = "judge.rentouts.eth";
     address constant DEPLOYER = 0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE; // RentoutsSubnames admin + issuer
+    address constant JUDGE_KEY = 0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA; // keystore rentouts-judge
+    address constant RELAY = 0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE; // EnsAgentRelay = AIArbiter.agent()
 
     IUniversalResolver ur = IUniversalResolver(EnsSepolia.UNIVERSAL_RESOLVER);
     JudgeNameHarness script;
     RentoutsSubnames sub;
     IUserRegistry registry;
-    address agent;
+    address arbiter;
+    uint256 id = uint256(keccak256("judge"));
     string statePath;
 
     function setUp() public {
@@ -81,48 +100,43 @@ contract JudgeNameForkTest is Test {
         sub = RentoutsSubnames(live.readAddress(".rentoutsSubnames"));
         registry = IUserRegistry(address(sub.registry()));
         script = new JudgeNameHarness();
-        agent = IAIArbiterAgent(script.SEPOLIA_AI_ARBITER()).agent();
+        arbiter = script.SEPOLIA_AI_ARBITER();
 
-        // The live preconditions this whole feature rests on.
-        uint256 id = uint256(keccak256("judge"));
-        require(registry.getExpiry(id) == 0 && !sub.retired(id), "fork: judge label already taken on Sepolia");
-        require(bytes(sub.labelOf(agent)).length == 0, "fork: the agent already has a name");
+        // The live state this whole feature rests on.
+        require(sub.holderOf(id) == JUDGE_KEY, "fork: judge.rentouts.eth is not held by the judge key any more");
         require(sub.isIssuer(DEPLOYER), "fork: deployer is no longer an issuer");
 
         script.setEnv("ENS_PARENT_LABEL", "rentouts");
         script.setEnv("BROADCAST", "true");
     }
 
-    /// @dev Each test gets its own copy of the live state file (forge runs tests in parallel).
-    function _useState(string memory name) internal {
+    /// @dev Each test gets its own copy of the live state file (forge runs tests in parallel). With
+    ///      `withJudge` false the copy has no judgeHolder / judgeName, as before the name was recorded.
+    function _useState(string memory name, bool withJudge) internal {
         statePath = string.concat("deployments/test-judge-", name, ".json");
-        vm.writeFile(statePath, vm.readFile("deployments/sepolia.json"));
+        string memory json = vm.readFile("deployments/sepolia.json");
+        if (!withJudge) {
+            json = vm.replace(json, string.concat('"judgeHolder": "', vm.toString(JUDGE_KEY), '",'), "");
+            json = vm.replace(json, string.concat('"judgeName": "', NAME, '",'), "");
+            assertFalse(json.keyExists(".judgeHolder"), "strip judgeHolder");
+            assertFalse(json.keyExists(".judgeName"), "strip judgeName");
+        }
+        vm.writeFile(statePath, json);
         script.setEnv("ENS_STATE", statePath);
     }
 
-    function _registerAndProfile() internal {
-        script.setSender(DEPLOYER);
-        script.registerJudge();
-        script.setSender(agent);
-        script.judgeProfile();
+    function test_JudgeKeyIsAPlainEoa() public view {
+        assertEq(JUDGE_KEY.code.length, 0, "judge key has code (EIP-7702?): the ENSIP-19 default addr would not be written");
     }
 
-    function test_AgentIsAPlainEoa() public view {
-        assertTrue(agent != address(0));
-        assertEq(agent.code.length, 0, "agent has code (EIP-7702?): the ENSIP-19 default addr would not be written");
-    }
+    function test_LiveNameResolvesToTheJudgeKey() public view {
+        assertEq(_addr(NAME), JUDGE_KEY, "UR addr(judge.rentouts.eth)");
+        assertEq(sub.nameOf(JUDGE_KEY), NAME);
+        assertEq(registry.getOwner(id), JUDGE_KEY);
+        assertEq(registry.getExpiry(id), type(uint64).max);
+        assertFalse(sub.retired(id));
 
-    function test_JudgeNameResolvesToAIArbiterAgent() public {
-        _useState("resolve");
-        _registerAndProfile();
-
-        assertEq(_addr(NAME), agent, "UR addr(judge.rentouts.eth)");
-        assertEq(_addr(NAME), IAIArbiterAgent(script.SEPOLIA_AI_ARBITER()).agent(), "== AIArbiter.agent()");
-        assertEq(sub.nameOf(agent), NAME);
-        assertEq(registry.getOwner(uint256(keccak256("judge"))), agent);
-        assertEq(registry.getExpiry(uint256(keccak256("judge"))), type(uint64).max);
-
-        assertEq(_text(NAME, "description"), script.judgeDescription(script.SEPOLIA_AI_ARBITER()));
+        assertEq(_text(NAME, "description"), script.judgeDescription(arbiter));
         assertEq(
             _text(NAME, "description"),
             "RentOuts AI dispute judge: proposes rulings on AIArbiter 0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5; humans can appeal and override"
@@ -130,89 +144,119 @@ contract JudgeNameForkTest is Test {
         assertEq(_text(NAME, "url"), "https://github.com/AiAlchemist0/rentouts-escrow");
         assertEq(_text(NAME, "rentouts.status"), "active");
         assertEq(_text(NAME, "rentouts.credential"), "tenant/v1");
+
+        // The committed state file names what the chain shows.
+        string memory json = vm.readFile("deployments/sepolia.json");
+        assertEq(json.readAddress(".judgeHolder"), JUDGE_KEY);
+        assertEq(json.readString(".judgeName"), NAME);
+    }
+
+    /// ENS gates the AI on-chain: AIArbiter's agent is the relay, and the relay's judge is the name's address.
+    function test_AIArbiterAgentIsTheRelayAndItsJudgeIsTheName() public view {
+        assertEq(IAIArbiterAgent(arbiter).agent(), RELAY, "AIArbiter.agent() is the EnsAgentRelay");
+        assertEq(IJudgeRelayView(RELAY).judge(), JUDGE_KEY, "relay.judge()");
+        assertEq(IJudgeRelayView(RELAY).judge(), _addr(NAME), "relay.judge() == addr(judge.rentouts.eth)");
+        assertEq(IJudgeRelayView(RELAY).name(), NAME);
     }
 
     /// The mismatch check the judge and the app rely on: true only for the name's own address.
     function test_ResolvesToRejectsAnyOtherAddress() public {
-        _useState("mismatch");
-        assertFalse(script.resolvesTo(NAME, agent), "unregistered name resolves to nothing");
-        _registerAndProfile();
-        assertTrue(script.resolvesTo(NAME, agent));
+        assertTrue(script.resolvesTo(NAME, JUDGE_KEY));
+        assertFalse(script.resolvesTo(NAME, RELAY), "the relay is the agent, not the name's address");
         assertFalse(script.resolvesTo(NAME, DEPLOYER));
         assertFalse(script.resolvesTo(NAME, address(0)));
         assertFalse(script.resolvesTo(NAME, makeAddr("rentouts.test.impostor")));
     }
 
     function test_Soulbound() public {
-        _useState("soulbound");
-        _registerAndProfile();
-        uint256 tokenId = registry.getTokenId(uint256(keccak256("judge")));
+        uint256 tokenId = registry.getTokenId(id);
         address other = makeAddr("rentouts.test.impostor");
 
-        vm.prank(agent);
-        vm.expectRevert(abi.encodeWithSignature("TransferDisallowed(uint256,address)", tokenId, agent));
+        vm.prank(JUDGE_KEY);
+        vm.expectRevert(abi.encodeWithSignature("TransferDisallowed(uint256,address)", tokenId, JUDGE_KEY));
         registry.unsafeTransfer(other, tokenId, "");
 
-        vm.prank(agent);
+        vm.prank(JUDGE_KEY);
         vm.expectRevert(bytes4(keccak256("TransferUnsafeUntilRegistryIsEmancipated()")));
-        registry.safeTransferFrom(agent, other, tokenId, 1, "");
+        registry.safeTransferFrom(JUDGE_KEY, other, tokenId, 1, "");
 
-        assertEq(_addr(NAME), agent);
+        assertEq(_addr(NAME), JUDGE_KEY);
     }
 
-    /// RentoutsSubnames.setProfileText is holder-only: the issuer registers, the judge key writes its profile.
+    /// RentoutsSubnames.setProfileText is holder-only: the issuer registered, the judge key wrote its profile.
     function test_OnlyTheJudgeKeySetsItsProfile() public {
-        _useState("profile");
+        _useState("profile", true);
         script.setSender(DEPLOYER);
-        script.registerJudge();
-        vm.expectRevert(bytes(string.concat("only the holder sets profile texts (RentoutsSubnames.setProfileText): --sender ", vm.toString(agent))));
+        vm.expectRevert(bytes(string.concat("only the holder sets profile texts (RentoutsSubnames.setProfileText): --sender ", vm.toString(JUDGE_KEY))));
         script.judgeProfile();
 
         vm.prank(DEPLOYER);
         vm.expectRevert(abi.encodeWithSelector(RentoutsSubnames.NotHolder.selector, "judge"));
         sub.setProfileText("judge", "description", "not the judge");
 
-        script.setSender(agent);
+        // Live texts are already set: the judge key's re-run sends nothing.
+        script.setSender(JUDGE_KEY);
+        uint64 nonce = vm.getNonce(JUDGE_KEY);
         script.judgeProfile();
-        // Re-run: already set, sends nothing.
-        uint64 nonce = vm.getNonce(agent);
-        script.judgeProfile();
-        assertEq(vm.getNonce(agent), nonce);
+        assertEq(vm.getNonce(JUDGE_KEY), nonce);
     }
 
-    /// The state file names the judge only once the chain shows it: the registering run records nothing,
-    /// the re-run (no transactions) records it.
-    function test_StateRecordedOnlyOnceOnChain() public {
-        _useState("record");
+    /// With the relay as AIArbiter.agent(), registerJudge names the relay's judge (never the relay), sends
+    /// nothing, and records judgeHolder in the state file, keeping every other key.
+    function test_RegisterJudgeRerunRecordsTheRelaysJudge() public {
+        _useState("record", false);
         script.setSender(DEPLOYER);
-        script.registerJudge();
-        assertFalse(vm.readFile(statePath).keyExists(".judgeHolder"), "recorded before the chain showed it");
-
         uint64 nonce = vm.getNonce(DEPLOYER);
         script.registerJudge();
         assertEq(vm.getNonce(DEPLOYER), nonce, "re-run sent a transaction");
         string memory json = vm.readFile(statePath);
-        assertEq(json.readAddress(".judgeHolder"), agent);
+        assertEq(json.readAddress(".judgeHolder"), JUDGE_KEY);
         assertEq(json.readString(".judgeName"), NAME);
-        // Everything else the live file holds survives.
         assertEq(json.readAddress(".rentoutsSubnames"), address(sub));
         assertEq(json.readAddress(".credentialSync"), vm.readFile("deployments/sepolia.json").readAddress(".credentialSync"));
     }
 
     function test_NoStateWrittenOnDryRun() public {
-        _useState("dryrun");
+        _useState("dryrun", false);
         script.setEnv("BROADCAST", "false");
         script.setSender(DEPLOYER);
-        script.registerJudge();
         script.registerJudge();
         assertFalse(vm.readFile(statePath).keyExists(".judgeHolder"));
     }
 
-    function test_OnlyAnIssuerRegisters() public {
-        _useState("issuer");
-        script.setSender(makeAddr("rentouts.test.mallory"));
-        vm.expectRevert(bytes("sender is not a RentoutsSubnames issuer"));
+    /// Rollback (the human's setAgent(judge key)): the name still resolves to the agent, nothing to send.
+    function test_AfterRollbackTheNameIsTheAgent() public {
+        vm.prank(IAIArbiterAdmin(arbiter).human());
+        IAIArbiterAdmin(arbiter).setAgent(JUDGE_KEY);
+        assertEq(IAIArbiterAgent(arbiter).agent(), JUDGE_KEY);
+        assertTrue(script.resolvesTo(NAME, IAIArbiterAgent(arbiter).agent()));
+
+        _useState("rollback", true);
+        script.setSender(DEPLOYER);
+        uint64 nonce = vm.getNonce(DEPLOYER);
         script.registerJudge();
+        assertEq(vm.getNonce(DEPLOYER), nonce);
+    }
+
+    /// FORK ONLY (labels are single-use, so the live name is never revoked): revoking judge.rentouts.eth
+    /// empties the name and the relay's judge, and the label cannot be issued again.
+    function test_RevokeOnForkEmptiesTheNameAndTheRelaysJudge() public {
+        vm.prank(DEPLOYER);
+        sub.revoke("judge", "fork rehearsal");
+        assertTrue(sub.retired(id));
+        assertEq(sub.holderOf(id), address(0));
+        assertEq(registry.getOwner(id), address(0));
+        assertFalse(script.resolvesTo(NAME, JUDGE_KEY));
+        assertEq(IJudgeRelayView(RELAY).judge(), address(0), "the relay forwards for nobody");
+
+        _useState("revoked", true);
+        script.setSender(DEPLOYER);
+        vm.expectRevert(bytes("the relay names no live judge: register the judge EOA first"));
+        script.registerJudge();
+
+        vm.prank(DEPLOYER);
+        vm.expectRevert();
+        sub.register("judge", JUDGE_KEY);
     }
 
     // ------------------------------------------------------------------ UR helpers
