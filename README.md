@@ -4,6 +4,15 @@
 
 **Live demo:** [https://rentouts-escrow-demo.dofusd.workers.dev](https://rentouts-escrow-demo.dofusd.workers.dev): the demo app from [`app/`](./app/README.md), static, on Ethereum Sepolia (MetaMask on Sepolia, a little test ETH and Circle test USDC). It holds no keys or secrets; every address comes from this repo's `deployments.json` and `ens/deployments/sepolia.json`.
 
+**See it live: lease #1** on the Sepolia escrow is a real dispute, settled end to end.
+- `alice.rentouts.eth` funded it (0.50 USDC deposit + 7 × 0.10 rent) through the World ID gate. She then disputed it: the listing said 25 m² and the room is 12 m². The landlord admitted it.
+- The AI judge proposed 100% to the tenant as **`judge.rentouts.eth` through `EnsAgentRelay`**: [propose tx](https://sepolia.etherscan.io/tx/0x51e5de711ec7367f34bc67dc87d68baa261498a339be902e0087f4eb79f9922d), citing Tokyo rules TKY-1 and TKY-7.
+- Nobody appealed in the 120 s window, so it was [executed](https://sepolia.etherscan.io/tx/0x7b5c16f4e2dc14414cbb89ed0ee10fc6ae8e8d56ba3743e153aab8600a77246d) and alice got her 1.20 USDC back.
+- After a [`CredentialSync.sync`](https://sepolia.etherscan.io/tx/0x37e4c695264b2c2d5c6c8cae22b045b2c11b822f0993ec9b942ff2e1eb35fb5b), her ENS credential shows 1 dispute and 100% of the deposit returned.
+- Lease #2 is funded and runs until 10 Oct.
+
+The app's [*Run the lease* tab](https://rentouts-escrow-demo.dofusd.workers.dev/#run) lists both leases without a wallet. Every tx is in [docs/DEMO.md](./docs/DEMO.md#live-example-lease-1-a-dispute-settled-by-the-ai-judge-open-this-first).
+
 **Status:** 🟢 Building during the event. Existing product (the RentOuts marketplace is live); the on-chain escrow + sponsor integrations here are the new hackathon work (Continuity Track).
 
 ## What's in this repo
