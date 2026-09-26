@@ -10,7 +10,7 @@ The demo runs on the live Sepolia deployment, broadcast Sat 2026-09-26 between 0
 |---|---|
 | `RentEscrow` | [`0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18`](https://eth-sepolia.blockscout.com/address/0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18) |
 | `AIArbiter` (the escrow's arbiter, bound to it) | [`0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5`](https://eth-sepolia.blockscout.com/address/0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5) |
-| `HumanGate` (verifier `0` = open) | [`0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd`](https://eth-sepolia.blockscout.com/address/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) |
+| `HumanGate` → `WorldIdV4Gate` `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa` (alice verified) | [`0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd`](https://eth-sepolia.blockscout.com/address/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) |
 | `LeaseShare1155` (minter = `RentEscrow`) | [`0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09`](https://eth-sepolia.blockscout.com/address/0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09) |
 | `CredentialSync` | [`0xd0783EC7B0668652718f3977Ca92235fe6bF9c56`](https://eth-sepolia.blockscout.com/address/0xd0783EC7B0668652718f3977Ca92235fe6bF9c56) |
 | `RentoutsSubnames` | [`0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60`](https://eth-sepolia.blockscout.com/address/0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60) |
@@ -74,7 +74,7 @@ SYNC=0xd0783EC7B0668652718f3977Ca92235fe6bF9c56     # CredentialSync
    cast call ${ARB} "human()(address)"  --rpc-url ${SEPOLIA_RPC_URL}   # = 0x798b01Cef62b889943Ce1D3C5011a755B297e486
    cast call ${ARB} "challengeWindow()(uint32)" --rpc-url ${SEPOLIA_RPC_URL}   # = 120
    cast call ${ESCROW} "arbiter()(address)" --rpc-url ${SEPOLIA_RPC_URL}   # = ARB
-   cast call ${GATE} "verifier()(address)" --rpc-url ${SEPOLIA_RPC_URL}    # = 0x0000…0000 (open) until World is plugged in
+   cast call ${GATE} "verifier()(address)" --rpc-url ${SEPOLIA_RPC_URL}    # = 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa
    ```
 6. **The judge runs.** In `judge/`: `npm ci`. `run.sh` loads the team secrets file (it provides `ZAI_API_KEY`; the script never prints it). Check that `npm run judge -- --input fixtures/damage-admitted.json --provider mock` prints a ruling.
 7. **Allowlist the investor** (share owner = deployer):
@@ -106,7 +106,7 @@ SYNC=0xd0783EC7B0668652718f3977Ca92235fe6bF9c56     # CredentialSync
 | 0:00–0:15 | (any) | app header, footer | One line of pitch: *"Rent held by a contract, not a company."* Scroll to the footer. | Every contract on Sepolia with an explorer link. `RentEscrow` has no owner, no admin and no fee. Its arbiter is the `AIArbiter` contract, and the human gate sits in front of funding. |
 | 0:15–0:35 | alice | **1 Claim your name** | Alice already has her name, so the tab shows her credential. | A card reading *Verified on-chain*: `alice.rentouts.eth` resolves to `0x4848…e936` with credential `tenant/v1`, plus her stats. All of it is read live through the ENSv2 Universal Resolver. Say: *soulbound (ENS refuses the transfer), revocable, and only RentOuts issuers can write `rentouts.*`*. |
 | 0:35–1:00 | **landlord** | **2 Create a lease** | Tenant field: type `alice.rentouts.eth`. Enter the demo terms and click **Create lease**. | *"alice.rentouts.eth resolves to 0x4848…"* and her compact card, then a summary: *the tenant prepays 0.50 USDC*. After the tx: *Lease #N created*. 100 shares of lease #N go to the landlord, and a landlord who isn't allowlisted couldn't list at all. |
-| 1:00–1:20 | **alice** | **3 Fund the lease** | Point at the human-gate notice. Click **Approve 0.50 USDC**, then **Fund lease**. | The notice says who may fund: open to every wallet until the World ID verifier is plugged in, verified humans only after that, with no escrow redeploy. Her USDC balance drops by 0.50, and *Lease funded. Rent starts unlocking now*. Only the contract can move that money from here on. |
+| 1:00–1:20 | **alice** | **3 Fund the lease** | Point at the human-gate notice. Click **Approve 0.50 USDC**, then **Fund lease**. | The notice says only a World ID 4.0 wallet can fund. Alice is that wallet. Her USDC balance drops by 0.50, and *Lease funded. Rent starts unlocking now*. Only the contract can move that money from here on. |
 | 1:20–1:45 | **landlord** | **4 Run the lease** | On **Lease A** (term over): click **Release … rent**, then **Close lease**. Then **Sync tenant's credential to ENS**. | Rent goes to the landlord, the deposit goes back to alice, and the state becomes *Closed*. After the sync, which the landlord can pay for because `sync` is permissionless, alice's card shows **Leases completed +1** and more rent paid. |
 | 1:45–2:10 | AI judge | terminal | **Lease B** is disputed, with one statement from each side. Run `./run.sh --lease <B> --propose` and type the judge keystore password. | Within seconds: the model's three answers with their probabilities and a severity, then the rubric arithmetic in code, the proposed `tenantBps`, the model latency, the `rulingHash` and the appeal deadline. Say: *the model answers questions; code computes the split; it's only a proposal*. |
 | 2:10–2:30 | anyone (landlord) | terminal, then app **4 Run the lease** | **Lease C** was proposed minutes ago and nobody appealed: `cast send ${ARB} "execute(uint256)" <C> --account rentouts-deployer --rpc-url ${SEPOLIA_RPC_URL}`. | The lease closes in the app, and each side receives its share of what was left. Say: *either party could have appealed inside the window, and the human arbiter can overrule at any time; the arbiter can only ever pay these two parties*. |
@@ -191,7 +191,7 @@ cast call ${ARB} "getRuling(uint256)((uint8,uint16,uint16,uint64,uint64,bytes32)
 # inputHash; --onchain also compares the file with AIArbiter.getRuling(leaseId). The arbiter is lowercase in the name:
 npm run judge -- --verify out/ruling-11155111-<aiArbiter>-<leaseId>.json --onchain
 npm run judge -- --verify out/ruling-11155111-0xc3d50752a1f42cc54d3c90a1261779eef5bbdcb5-<leaseId>.json --onchain
-# The human gate: verifier 0 means open
+# The human gate: WorldIdV4Gate 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa
 cast call $(cast call ${ESCROW} "humanGate()(address)" --rpc-url ${SEPOLIA_RPC_URL}) "verifier()(address)" --rpc-url ${SEPOLIA_RPC_URL}
 ```
 
