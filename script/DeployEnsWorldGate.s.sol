@@ -17,30 +17,39 @@ interface IHumanGateAdmin {
 ///           EnsCredentialGate(RentoutsSubnames)              "holds an active rentouts.eth name"
 ///           AllOfHumanGate([WorldIdV4Gate, EnsCredentialGate]) "World-verified human AND that"
 ///         It does NOT touch HumanGate: the gate owner then switches funding over with ONE tx
-///         (printed at the end), and rolls back with one more (setVerifier(WorldIdV4Gate) or 0).
+///         (printed at the end), and rolls back with one more: setVerifier(WorldIdV4Gate #2), the
+///         verifier live today (or 0 to open the gate).
 ///         Neither contract has an owner or any setter. Signs with a Foundry keystore (--account);
 ///         never takes a raw private key.
 ///
 ///   Env (all optional; defaults are the live Sepolia deployment):
-///     WORLD_GATE    WorldIdV4Gate      default 0x27052bD69b3d961940bCD093C21ba729b6c1B209
+///     WORLD_GATE    WorldIdV4Gate #2 (action fund-lease-wallet; HumanGate's verifier since tx
+///                   0xcd93549e…6b71, block 11783640; alice.rentouts.eth is registered on it)
+///                                      default 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa
+///                   (gate #1 0x27052bD6…B209, action fund-lease, is superseded: do not use it)
 ///     ENS_SUBNAMES  RentoutsSubnames   default 0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60
 ///     HUMAN_GATE    HumanGate (only read, for the printed setVerifier command)
 ///                                      default 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd
 ///
 ///   Dry run (simulation only, records nothing):
-///     forge script script/DeployEnsWorldGate.s.sol --rpc-url sepolia --sender <deployer>
+///     forge script script/DeployEnsWorldGate.s.sol --rpc-url https://ethereum-sepolia-rpc.publicnode.com \
+///       --sender 0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE
 ///   Deploy (also records the "sepoliaHumanGates" entry of deployments.json):
-///     forge script script/DeployEnsWorldGate.s.sol --rpc-url sepolia \
-///       --account <keystore-name> --sender <deployer> --broadcast
+///     forge script script/DeployEnsWorldGate.s.sol --rpc-url https://ethereum-sepolia-rpc.publicnode.com \
+///       --account rentouts-deployer --sender 0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE --broadcast
 contract DeployEnsWorldGate is Script {
     uint256 internal constant SEPOLIA_CHAIN_ID = 11155111;
-    address public constant DEFAULT_WORLD_GATE = 0x27052bD69b3d961940bCD093C21ba729b6c1B209;
+    /// @notice WorldIdV4Gate #2 (action `fund-lease-wallet`), HumanGate's live verifier.
+    address public constant DEFAULT_WORLD_GATE = 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa;
     address public constant DEFAULT_SUBNAMES = 0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60;
     address public constant DEFAULT_HUMAN_GATE = 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd;
     /// @notice alice.rentouts.eth, the demo tenant: printed as a pre-flight check.
     address public constant DEMO_TENANT = 0x484811c8c967809bE644A89d677933c29fb9e936;
     string public constant DEPLOYMENTS_FILE = "./deployments.json";
     string public constant RECORD_KEY = "sepoliaHumanGates";
+    /// @notice Signing flags in the printed owner commands: the HumanGate owner's Foundry keystore.
+    string public constant OWNER_CAST_FLAGS =
+        " --account rentouts-deployer --rpc-url https://ethereum-sepolia-rpc.publicnode.com";
 
     function run() external returns (EnsCredentialGate ensGate, AllOfHumanGate composite) {
         address worldGate = vm.envOr("WORLD_GATE", DEFAULT_WORLD_GATE);
@@ -138,21 +147,24 @@ contract DeployEnsWorldGate is Script {
                 vm.toString(humanGate),
                 " \"setVerifier(address)\" ",
                 vm.toString(composite),
-                " --account <owner-keystore> --rpc-url sepolia"
+                OWNER_CAST_FLAGS
             )
         );
-        console2.log("ROLLBACK to World ID only:");
+        console2.log("ROLLBACK to World ID only (WORLD_GATE):");
         console2.log(
             string.concat(
                 "  cast send ",
                 vm.toString(humanGate),
                 " \"setVerifier(address)\" ",
                 vm.toString(worldGate),
-                " --account <owner-keystore> --rpc-url sepolia"
+                OWNER_CAST_FLAGS
             )
         );
         console2.log(
             "ROLLBACK to an open gate (no checks): same command with 0x0000000000000000000000000000000000000000"
         );
+        if (humanGate.code.length > 0 && IHumanGateAdmin(humanGate).verifier() != worldGate) {
+            console2.log("WARNING: WORLD_GATE is not HumanGate's current verifier: check the rollback target");
+        }
     }
 }

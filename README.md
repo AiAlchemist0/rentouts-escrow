@@ -62,31 +62,32 @@ World App issues protocol 4.0 proofs. World checks them at `POST /api/v4/verify/
 
 The gate owner can only decide **who may fund a new lease**. It holds no tokens and cannot move, freeze or redirect funds. `claimRent`, `closeLease`, `openDispute` and `resolveDispute` never consult it, so a funded lease runs to the end whatever the gate says (tested). If the verifier reverts, funding fails closed until the owner fixes or clears it.
 
-**Live:** the Sepolia escrow's gate is `HumanGate` [`0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd`](https://eth-sepolia.blockscout.com/address/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) (owner: the deployer; verifier `0`, so open). Its deploy tx and verification status are in the Live on Ethereum Sepolia table below.
+**Live:** the Sepolia escrow's gate is `HumanGate` [`0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd`](https://eth-sepolia.blockscout.com/address/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) (owner: the deployer). Since 2026-09-26 12:42 JST its verifier is `WorldIdV4Gate` #2 [`0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`](https://eth-sepolia.blockscout.com/address/0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa) (action `fund-lease-wallet`, tx [`0xcd93549e…6b71`](https://sepolia.etherscan.io/tx/0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671), block 11783640), so only World-registered wallets can fund; `alice.rentouts.eth` is registered. Its deploy tx and verification status are in the Live on Ethereum Sepolia table below.
 
 #### World ID + ENS combined gate (ready to deploy, not live yet)
 
-Two small contracts make ENS part of the money path, with no escrow redeploy. Funding a lease then needs a World-verified human **and** an active `rentouts.eth` credential:
+Today funding needs World ID only (`WorldIdV4Gate` #2 above). Two small contracts make ENS part of the money path as well, with no escrow redeploy. Funding a lease then needs a World-verified human **and** an active `rentouts.eth` credential:
 
 - `EnsCredentialGate` ([`src/EnsCredentialGate.sol`](./src/EnsCredentialGate.sol)): `isVerified(wallet)` is true only if the live `RentoutsSubnames` still maps the wallet to a label (`revoke` clears it) **and** the ENSv2 `UserRegistry` says the wallet owns `<label>.rentouts.eth` (`getOwner(uint256(keccak256(label))) == wallet`, which catches a name unregistered or expired outside RentoutsSubnames).
-- `AllOfHumanGate` ([`src/AllOfHumanGate.sol`](./src/AllOfHumanGate.sol)): the AND of 1 to 4 fixed gates. Here the gates are `[WorldIdV4Gate, EnsCredentialGate]`.
+- `AllOfHumanGate` ([`src/AllOfHumanGate.sol`](./src/AllOfHumanGate.sol)): the AND of 1 to 4 fixed gates. Here the gates are `[WorldIdV4Gate #2, EnsCredentialGate]`.
 
 Neither has an owner or a setter. Neither can revert in `isVerified`: every sub-call is a gas-capped `staticcall` whose return data is checked by hand, and a revert, out-of-gas or malformed answer counts as `false`. The gate fails closed.
 
-Going live is one deploy plus one owner transaction. Rolling back is one transaction:
+Going live is one deploy plus one owner transaction. Rolling back is one transaction, back to the World-only gate that is live today:
 
 ```bash
+export RPC=https://ethereum-sepolia-rpc.publicnode.com
 # 1. Deploy both gates (dry run: leave out --account/--broadcast; records "sepoliaHumanGates" in deployments.json only on --broadcast)
-forge script script/DeployEnsWorldGate.s.sol --rpc-url sepolia \
+forge script script/DeployEnsWorldGate.s.sol --rpc-url ${RPC} \
   --account rentouts-deployer --sender 0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE --broadcast
 # 2. HumanGate owner switches funding to World ID AND ENS (the script prints this exact command)
-cast send 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd "setVerifier(address)" <allOfHumanGate> --account rentouts-deployer --rpc-url sepolia
-# Rollback: World ID only
-cast send 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd "setVerifier(address)" 0x27052bD69b3d961940bCD093C21ba729b6c1B209 --account rentouts-deployer --rpc-url sepolia
+cast send 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd "setVerifier(address)" <allOfHumanGate> --account rentouts-deployer --rpc-url ${RPC}
+# Rollback: World ID only (WorldIdV4Gate #2, the verifier live today)
+cast send 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd "setVerifier(address)" 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa --account rentouts-deployer --rpc-url ${RPC}
 # (or 0x0000000000000000000000000000000000000000 to open the gate)
 ```
 
-`test/EnsWorldGate.fork.t.sol` runs this against the live Sepolia contracts on a fork. It deploys through the script, points the live `HumanGate` at the combined gate as its owner, and checks each case. `alice.rentouts.eth` without World ID gets `NotVerifiedHuman`. With World ID she funds a real lease. A World-verified wallet with no name is refused. Revoking `alice.rentouts.eth` stops her funding. Remove ENS or remove World and funding stops.
+`test/EnsWorldGate.fork.t.sol` rehearses this on a fork of the live Sepolia contracts. It deploys through the script, calls `setVerifier(allOfHumanGate)` as the real `HumanGate` owner, and checks each case. `alice.rentouts.eth` passes on her real on-chain state, with no cheats: her World ID registration on gate #2 and her name. She funds a real lease with her own USDC. A World-registered wallet with no name is refused, and so is a named wallet with no World ID. Revoking `alice.rentouts.eth` stops her funding. Rolling back to gate #2 lets the nameless World wallet fund again and still refuses the named one. Remove ENS or remove World and funding stops.
 
 ### Invariants (`test/RentEscrow.invariant.t.sol`)
 
@@ -107,8 +108,8 @@ forge test --match-path test/HumanGate.t.sol      # 16 human-gate tests
 forge test --match-path test/DeployEscrow.t.sol   # 15 deploy-script tests
 forge test --match-path 'test/AIArbiter*'         # 34 AIArbiter tests + 3 invariants (AI-1..AI-3)
 forge test --match-path test/EnsWorldGate.t.sol   # 31 World + ENS combined-gate tests (mocks, fuzzed return data)
-forge test --match-path test/EnsWorldGate.fork.t.sol  # 6 fork tests against live Sepolia (needs network)
-forge test                                        # everything, incl. the 12 LeaseShare1155 tests (137 total)
+forge test --match-path test/EnsWorldGate.fork.t.sol  # 8 fork tests against live Sepolia (needs network)
+forge test                                        # everything, incl. the 12 LeaseShare1155 tests (190 total)
 ```
 
 Unit tests cover every function and exact custom-error revert, partial / complete claims with `vm.warp`, the close grace rule, cancel, 0 / 5000 / 10000 bps splits (plus a fuzzed split), share minting and the non-allowlisted-landlord revert, re-entry through the ERC-1155 receive hook, the arbiter never being a party, tenant-stats accounting (including how a dispute payout splits into refunded rent, returned deposit and rent paid), and the way out when USDC blacklists the landlord or the tenant.
@@ -165,7 +166,7 @@ Wiring, as read back on-chain:
 
 - Testnet only: Ethereum Sepolia with **Circle's test USDC**. Hackathon code, not audited.
 - The arbiter is a **single EOA** for the hackathon, or `AIArbiter` with a single human EOA behind it (a Safe multisig in production; the contract accepts either). It can never be a lease's landlord or tenant and never send funds outside the lease's two parties, but it decides the split, and a disputed lease stays frozen until it rules: there is no timeout or fallback. Either party can open a dispute for as long as the lease is `ACTIVE`, even after the grace window, so a tenant can pre-empt a keeper's `closeLease`; the grace window only guarantees the landlord a turn.
-- World ID is **not wired in yet**: the deployed `HumanGate` is open (verifier `0`) until a verifier is set. Its owner is the deployer EOA, who can then refuse funding of new leases (never touch existing ones).
+- World ID gates funding through `WorldIdV4Gate` #2, whose `register` trusts the RentOuts RP signer's attestation of a successful `/api/v4/verify` (there is no World ID 4.0 verifier on Ethereum Sepolia). The `HumanGate` owner is the deployer EOA, who can swap the verifier and so refuse funding of new leases (never touch existing ones).
 - Earned rent that nobody has claimed when a dispute opens (by either party) is part of the arbiter's pot: it is frozen until the ruling, and a ruling can move part of it to the tenant (for example an arbiter that rules in coarse steps, such as an AI judge's 25% steps). `claimRent` is open to anyone, so a landlord or keeper should claim as periods elapse. `tenantStats` counts only the rent that actually reaches the landlord.
 - `tenantStats` are counts, not weighted by value or term: a landlord and a tenant working together can build a record out of 1-unit, 60-second leases for the cost of gas. The sybil brake is landlord allowlisting on `LeaseShare1155` (only allowlisted landlords can create leases; today only the deployer), so an escrow deployed without lease shares has no brake. A minimum lease term would add real cost; weighting by value would not, since the deposit comes back a minute later.
 - Lease shares minted at `createLease` stay with the landlord if the lease is cancelled (`LeaseShare1155` has no burn).

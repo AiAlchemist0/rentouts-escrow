@@ -323,12 +323,12 @@ sequenceDiagram
 
 #### Combined gate: World ID AND an ENS credential (ready to deploy)
 
-**Status: built and fork-tested, not deployed.** On the live chain `HumanGate` still points at `WorldIdV4Gate` alone.
+**Status: built and fork-tested, not deployed.** On the live chain `HumanGate` points at `WorldIdV4Gate` #2 [`0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`](https://eth-sepolia.blockscout.com/address/0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa) alone (action `fund-lease-wallet`; `setVerifier` tx [`0xcd93549e…6b71`](https://sepolia.etherscan.io/tx/0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671), block 11783640). `alice.rentouts.eth` is registered on it (tx [`0xdbbfc6dd…8908`](https://sepolia.etherscan.io/tx/0xdbbfc6dd08fdaa4da200b51e6515a7b60423a7c3f94feb06f4a3b28f65148908)), so today she is the only wallet that can fund. Gate #1 `0x27052bD6…B209` (action `fund-lease`) is superseded.
 
 `HumanGate.setVerifier` takes any `IHumanGate`. So ENS can join the money path without touching the escrow. Two ownerless contracts do it:
 
 - `EnsCredentialGate(RentoutsSubnames)`: `isVerified(wallet)` holds while `labelOf(wallet)` is non-empty **and** the ENSv2 `UserRegistry` still says the wallet owns that label.
-- `AllOfHumanGate([WorldIdV4Gate, EnsCredentialGate])`: true only if both say true.
+- `AllOfHumanGate([WorldIdV4Gate #2, EnsCredentialGate])`: true only if both say true.
 
 ```mermaid
 sequenceDiagram
@@ -356,24 +356,25 @@ sequenceDiagram
     HG-->>RE: true, or revert NotVerifiedHuman(tenant)
 ```
 
-**The "remove it and funding stops" test.** Take away either sponsor's piece and `fundLease` reverts `NotVerifiedHuman`. [`test/EnsWorldGate.fork.t.sol`](./test/EnsWorldGate.fork.t.sol) shows this on a fork of the live Sepolia contracts. It deploys the gates through the deploy script, and as the real `HumanGate` owner it calls `setVerifier(allOfHumanGate)`:
+**The "remove it and funding stops" test.** Take away either sponsor's piece and `fundLease` reverts `NotVerifiedHuman`. [`test/EnsWorldGate.fork.t.sol`](./test/EnsWorldGate.fork.t.sol) shows this on a fork of the live Sepolia contracts. It deploys the gates through the deploy script, and as the real `HumanGate` owner it calls `setVerifier(allOfHumanGate)`. alice's row is her real on-chain state, with no cheats. The counter-examples have no real wallet on Sepolia, so the test makes them on the fork:
 
 | Wallet | World ID | `rentouts.eth` | `fundLease` |
 |---|---|---|---|
-| `alice.rentouts.eth` `0x4848…e936` | no | active | reverts `NotVerifiedHuman` |
-| `alice.rentouts.eth` | yes (simulated `register`, `vm.store` on `_verified`, slot 1) | active | **funds** a real lease with Circle USDC |
-| fresh wallet | yes | none | reverts `NotVerifiedHuman` |
+| `alice.rentouts.eth` `0x4848…e936` | yes, real `register` on gate #2 | active, real | **funds** a real lease with her own Circle USDC |
+| fresh wallet | yes (simulated `register`: `vm.store` on gate #2's `_verified`, slot 1) | none | reverts `NotVerifiedHuman` |
+| fresh wallet | no | active (self-serve `register` on the fork) | reverts `NotVerifiedHuman` |
 | `alice.rentouts.eth` after the live issuer calls `revoke("alice")` | yes | revoked | reverts `NotVerifiedHuman` |
-| fresh wallet, after rollback to `setVerifier(WorldIdV4Gate)` | yes | none | funds |
+| after rollback to `setVerifier(0x5Cb8…aABa)` (gate #2): the World-only wallet | yes | none | funds |
+| after rollback: the named wallet | no | active | reverts `NotVerifiedHuman` |
 
 **Safety properties (unit-tested with mocks, [`test/EnsWorldGate.t.sol`](./test/EnsWorldGate.t.sol)):**
 
 - `isVerified` never reverts. Solidity's `try/catch` is not enough for this: a malformed return (a short answer, a bool of 2, a bad string offset) would make the ABI decoder revert in the caller, outside the `catch`. So every sub-call is a low-level `staticcall` that copies back a bounded amount of data, and the result is decoded by hand. Fuzzed with arbitrary return bytes.
 - Gas is bounded. Each gate gets at most 300k gas, and each ENS read at most 100k. A dependency that loops forever costs one cap, then reads as `false`. The live check costs about 38k gas.
 - It fails closed. Every failure is `false`, and a `false` blocks funding. A caller who sends too little gas can only make their own `fundLease` revert. They can never turn a `false` into a `true`.
-- There is no admin. The gate lists and addresses are immutables. Changing the policy means deploying a new gate and one `setVerifier` from the `HumanGate` owner, and that same owner can roll back with `setVerifier(WorldIdV4Gate)` (World only) or `setVerifier(0)` (open).
+- There is no admin. The gate lists and addresses are immutables. Changing the policy means deploying a new gate and one `setVerifier` from the `HumanGate` owner, and that same owner can roll back with `setVerifier(0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa)` (`WorldIdV4Gate` #2, World only, the verifier live today) or `setVerifier(0)` (open).
 
-**Go-live (two transactions):** `forge script script/DeployEnsWorldGate.s.sol --rpc-url sepolia --account rentouts-deployer --sender <deployer> --broadcast`. It deploys both gates, records `sepoliaHumanGates` in `deployments.json`, and prints the exact next command. Then the owner runs `cast send 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd "setVerifier(address)" <allOfHumanGate> …`. Before switching, the tenant needs both a `WorldIdV4Gate.register` and a `rentouts.eth` name. The script prints both checks for `alice.rentouts.eth`.
+**Go-live (one deploy, one `setVerifier`):** `forge script script/DeployEnsWorldGate.s.sol --rpc-url https://ethereum-sepolia-rpc.publicnode.com --account rentouts-deployer --sender 0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE --broadcast`. It deploys both gates (`WORLD_GATE` defaults to gate #2), records `sepoliaHumanGates` in `deployments.json`, and prints the exact next command. Then the owner runs `cast send 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd "setVerifier(address)" <allOfHumanGate> …`. Rollback is `setVerifier(0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa)`. Before switching, a tenant needs both a `register` on gate #2 and a `rentouts.eth` name. The script prints both checks for `alice.rentouts.eth`, and both are already true.
 
 ### (d) Dispute: evidence, AI proposal, challenge window, human override
 
@@ -759,7 +760,7 @@ The same contracts on Etherscan: [`AIArbiter`](https://sepolia.etherscan.io/addr
 | Issuer EOA | [`0xF6048B190D178Fb6F0870c65CD2F7E06381713C4`](https://sepolia.etherscan.io/address/0xF6048B190D178Fb6F0870c65CD2F7E06381713C4) | 🟢 live; judged keys only since the role cleanup ([§3](#3-roles-and-trust-model)) |
 | Human arbiter EOA (`AIArbiter.human`) | [`0x798b01Cef62b889943Ce1D3C5011a755B297e486`](https://sepolia.etherscan.io/address/0x798b01Cef62b889943Ce1D3C5011a755B297e486) | 🟢 live |
 | AI judge key (`AIArbiter.agent`, keystore `rentouts-judge`) | [`0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA`](https://sepolia.etherscan.io/address/0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA) | 🟢 live |
-| World ID verifier | _not built yet_ | ⏸ next, plugged in with `HumanGate.setVerifier` |
+| World ID verifier (`WorldIdV4Gate` #2, action `fund-lease-wallet`) | [`0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`](https://sepolia.etherscan.io/address/0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa) | 🟢 live, `HumanGate.verifier` since block 11783640 |
 | Circle test USDC (Circle's) | [`0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`](https://sepolia.etherscan.io/address/0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238) | 🟢 external, 6 decimals |
 | ENS Universal Resolver (ENS's) | [`0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe`](https://sepolia.etherscan.io/address/0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe) | 🟢 external |
 | ENS `ETHRegistry` (ENS's) | [`0x657eA849311d3D5823348ddEd7C2AaAFb3EDE09E`](https://sepolia.etherscan.io/address/0x657eA849311d3D5823348ddEd7C2AaAFb3EDE09E) | 🟢 external |
@@ -770,8 +771,8 @@ The same contracts on Etherscan: [`AIArbiter`](https://sepolia.etherscan.io/addr
 2. **`DeployEscrow`** (done): deploys `LeaseShare1155`, then `HumanGate` (open), then `RentEscrow` with `arbiter = AIArbiter` and `humanGate = HumanGate`. It then makes the escrow the share minter. The deployer is allowlisted as the demo landlord.
 3. **`bindEscrow`** (done): the human arbiter binds `AIArbiter` to that escrow, once.
 4. **`CredentialSync`** (done): it takes the escrow address in its constructor and is made an issuer. The issuer role cleanup was broadcast right after.
-5. **World ID, next**: `HumanGate.setVerifier(worldVerifier)` from the gate owner. The escrow is not redeployed.
-6. **World ID + ENS (ready, not broadcast)**: `script/DeployEnsWorldGate.s.sol` deploys `EnsCredentialGate` + `AllOfHumanGate`, then the gate owner calls `HumanGate.setVerifier(allOfHumanGate)`. The rollback is `setVerifier(WorldIdV4Gate)` or `setVerifier(0)`. See [§5(c)](#combined-gate-world-id-and-an-ens-credential-ready-to-deploy).
+5. **World ID** (done, Sat 12:42 JST): `HumanGate.setVerifier(WorldIdV4Gate #2)` from the gate owner, tx `0xcd93549e…6b71`. The escrow was not redeployed.
+6. **World ID + ENS (ready, not broadcast)**: `script/DeployEnsWorldGate.s.sol` deploys `EnsCredentialGate` + `AllOfHumanGate`, then the gate owner calls `HumanGate.setVerifier(allOfHumanGate)`. The rollback is `setVerifier(0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa)` (gate #2) or `setVerifier(0)`. See [§5(c)](#combined-gate-world-id-and-an-ens-credential-ready-to-deploy).
 
 The commands that were run, for a redeploy:
 
@@ -789,9 +790,10 @@ ESCROW_ADDRESS=<rentEscrow> BROADCAST=true ./scripts/ens.sh credentialSync
 BROADCAST=true ./scripts/ens.sh subnames
 # 5. Later: plug World ID in (no escrow redeploy)
 cast send <humanGate> "setVerifier(address)" <worldVerifier> --account rentouts-deployer --rpc-url ${SEPOLIA_RPC_URL}
-# 6. Optional: World ID AND an ENS credential (prints the exact setVerifier command)
+# 6. Optional: World ID AND an ENS credential (prints the exact setVerifier command; WORLD_GATE defaults to gate #2)
 forge script script/DeployEnsWorldGate.s.sol --rpc-url sepolia --account rentouts-deployer --sender <deployer> --broadcast
 cast send <humanGate> "setVerifier(address)" <allOfHumanGate> --account rentouts-deployer --rpc-url ${SEPOLIA_RPC_URL}
+#    rollback: cast send <humanGate> "setVerifier(address)" 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa ...
 ```
 
 Each Foundry script has a dry-run mode (omit `--broadcast`, or `BROADCAST` for `ens.sh`) that simulates without recording anything.

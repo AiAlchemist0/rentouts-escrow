@@ -161,6 +161,13 @@ Sourcify pages: `https://repo.sourcify.dev/11155111/<address>`. Etherscan needs 
 - Tests: 31 unit/fuzz (`test/EnsWorldGate.t.sol`) + 6 fork tests against live Sepolia (`test/EnsWorldGate.fork.t.sol`: alice funds a real lease only with World + ENS; World-only wallet reverts; live `revoke("alice")` stops funding; rollback to World only). Root suite 188/188.
 - Go-live = `script/DeployEnsWorldGate.s.sol --broadcast` + one owner `setVerifier(allOfHumanGate)`; rollback `setVerifier(WorldIdV4Gate)` or `0`. Dry run against the public RPC is clean.
 
+**Sat 12:52: combined gate re-pointed at the live World gate #2 (branch `feat/ens-world-gate`, still ready to deploy, NOT broadcast).**
+- Live since 12:42: `HumanGate.verifier()` = `WorldIdV4Gate` #2 `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa` (action `fund-lease-wallet`), owner tx `0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671`, block 11783640. alice is registered on it (tx `0xdbbfc6dd…8908`). Gate #1 `0x27052bD6…B209` is superseded.
+- `script/DeployEnsWorldGate.s.sol`: `WORLD_GATE` now defaults to gate #2; the printed owner commands are copy-paste ready (`--account rentouts-deployer`, public RPC) and warn if `WORLD_GATE` is not the current verifier.
+- `test/EnsWorldGate.fork.t.sol` (8 tests) now uses alice's real state, no cheats: `AllOf[gate #2, EnsCredentialGate].isVerified(alice) == true` on the fork, and she funds a real lease with her own USDC after the owner's `setVerifier(allOfHumanGate)`. Counter-examples made on the fork: a World-registered wallet with no name (`vm.store` on gate #2's `_verified`) and a named wallet with no World ID (self-serve `register`) both revert `NotVerifiedHuman`; `revoke("alice")` stops her; rollback `setVerifier(gate #2)` lets the World-only wallet fund and still refuses the named one. Root forge 190/190, ens forge 42/42.
+- Dry run (`--sender 0xdD9c…CCCE`, public RPC): simulation OK, ~746k gas, `current verifier` = gate #2, pre-flight alice World `true` / ENS `true` / combined `true`. The predicted gate addresses follow the deployer's nonce (they moved from nonce 35 to 36 during this session), so `setVerifier` must use the address the `--broadcast` run prints.
+- Go-live = one deploy + one `setVerifier(allOfHumanGate)`; rollback = `setVerifier(0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa)`.
+
 ---
 
 ## Open items
