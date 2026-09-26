@@ -20,13 +20,15 @@ Running, timestamped log of the ENS track (owner: Bektur), updated as we go. Tim
 | `CredentialSync` | [`0xd0783EC7B0668652718f3977Ca92235fe6bF9c56`](https://eth-sepolia.blockscout.com/address/0xd0783EC7B0668652718f3977Ca92235fe6bF9c56) — live Sat 03:08, issuer on `RentoutsSubnames`, reads `RentEscrow`; source verified (Sourcify `exact_match`, Blockscout) |
 | Escrow stack (`feat/ai-judge`) | `RentEscrow` [`0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18`](https://eth-sepolia.blockscout.com/address/0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18) (Circle USDC), `AIArbiter` `0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5`, `HumanGate` `0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd` → `WorldIdV4Gate` `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa` (alice verified), `LeaseShare1155` `0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09`; all source verified (see Sat 03:05 and 03:15) |
 | Issuer (keystore `rentouts-issuer`) | `0xF6048B190D178Fb6F0870c65CD2F7E06381713C4` — key-scoped `SET_TEXT` on `rentouts.onTimeRate`, `rating`, `verified` only (the three escrow-derived grants were revoked Sat 03:09; `roles()` is 0 on all five derived keys), **no** root resolver roles |
-| Demo holder (keystore `rentouts-alice`) | `0x484811c8c967809bE644A89d677933c29fb9e936` → **`alice.rentouts.eth`** ✅; 3.0 test USDC since Sat 12:56 |
+| Demo holder (keystore `rentouts-alice`) | `0x484811c8c967809bE644A89d677933c29fb9e936` → **`alice.rentouts.eth`** ✅; 2.0 test USDC since Sat 16:20 (3.0 from Sat 12:56; lease #1 came back in full, lease #2 holds 1.0 until 10 Oct) |
+| Live leases | `nextLeaseId` = 3. **#1** `CLOSED`: disputed by alice, AI proposal through `judge.rentouts.eth` + `EnsAgentRelay`, executed, 1.20 USDC back to alice (Sat 16:15–16:20). **#2** `ACTIVE` until Sat 2026-10-10 16:19 JST. `LeaseShare1155` #1 and #2: 100 each to the landlord. See the Sat 16:15 entry |
+| alice's escrow-derived records | ✅ first live `CredentialSync.sync(alice)` Sat 16:29 ([`0x37e4c695…fb5b`](https://sepolia.etherscan.io/tx/0x37e4c695264b2c2d5c6c8cae22b045b2c11b822f0993ec9b942ff2e1eb35fb5b)): `leasesCompleted` 0, `disputes` 1, `rentPaid` 0.00, `depositReturnRate` 100, `escrow` `eip155:11155111:0x2357…cd18` |
 | AI judge's name | **`judge.rentouts.eth`** → judge key `0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA` (keystore `rentouts-judge`) ✅, since Sat 12:47 (block 11783660) |
 | `EnsAgentRelay` (root `src/`) | [`0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE`](https://eth-sepolia.blockscout.com/address/0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE) = `AIArbiter.agent()` since Sat 12:51 (block 11783678): only the holder of `judge.rentouts.eth` can propose; Sourcify `exact_match`, Blockscout |
 | Parent records | `addr` = `0x7ed696c879a1a7FD2eD3b49d9982E634a8647eb1` (RentOuts' published address), `url` = `https://rentouts.co`, `email` = `partners@rentouts.co`, `com.twitter` = `RentOuts`, `description` |
 | Machine-readable | [`ens/deployments/sepolia.json`](../../ens/deployments/sepolia.json) |
 | Gate | ✅ **passed Fri 22:24** (`alice.rentouts.eth` resolves `addr` + `rentouts.credential`) |
-| Next | first live `sync` (alice after a demo lease), Etherscan verification (needs an API key) |
+| Next | Etherscan verification (needs an API key) |
 
 ---
 
@@ -220,6 +222,45 @@ Sourcify pages: `https://repo.sourcify.dev/11155111/<address>`. Etherscan needs 
 - README, ARCHITECTURE (component map, §5(d) sequence through the relay, §6, §9, §10, §11), DEMO (judge command with `JUDGE_RELAY`, pre-flight checks, live refusal simulations, the revoke beat on a fork only), SUBMISSION, `judge/README.md`, `ens/README.md` and `app/README.md` describe the relay as live. The hosted app URL (https://rentouts-escrow-demo.dofusd.workers.dev) is in README, SUBMISSION and DEMO; its current build predates the judge-name label. The short form `0xcd93549e…6b71` is fixed to `…b86671`. README's MultiBaas lines now match SUBMISSION (not used in this build).
 - Checks: root forge 222/222 (18 suites), `ens/` forge 52/52, judge `tsc` clean + vitest 123/123 (14 files), app `tsc` clean + build + vitest 98/98 (11 files), `live-smoke` all wiring checks passed, `ens-smoke` OK. Nothing was broadcast.
 
+**Sat 16:15–16:29: the first live leases on the escrow, and the first live `CredentialSync.sync(alice)`.** Times are block timestamps. Every tx below was read back with `cast receipt`, and every one has `status 1`. The landlord is the deployer `0xdD9c…CCCE` and the tenant is alice `0x4848…e936` (`alice.rentouts.eth`). Everything was sent from a terminal with Foundry keystores: `cast send`, plus the judge CLI for the proposal.
+
+*Lease #1, the worked dispute:* a 0.50 USDC deposit plus 7 × 0.10 USDC rent, with daily periods (86,400 s).
+
+| JST | Block | From | Tx | What happened |
+|---|---|---|---|---|
+| 16:15:48 | 11784685 | landlord | `createLease(alice, 500000, 100000, 86400, 7)` [`0x82208306…e769`](https://sepolia.etherscan.io/tx/0x822083066f0ddf4706dd467b8c69bb46628c7570d3e51c0d2c0de2a9ace7e769) | `LeaseCreated(1)`; `LeaseShare1155` mints 100 of token #1 to the landlord |
+| 16:16:12 | 11784687 | alice | USDC `approve(RentEscrow, 1.20)` [`0x652c68bb…af71`](https://sepolia.etherscan.io/tx/0x652c68bb8b8ce32d74a94a7cc2890c1abae8394d27b0e2966bc00c0fb001af71) | |
+| 16:16:24 | 11784688 | alice | `fundLease(1)` [`0xc45b64b6…1fb6`](https://sepolia.etherscan.io/tx/0xc45b64b691764e83431f22430c14cbe7dc85b80123545d7d3490cee372231fb6) | 1.20 USDC into the escrow. At this block `HumanGate.verifier()` is `WorldIdV4Gate` `0x5Cb8…aABa`, so the World ID 4.0 gate let a registered human fund |
+| 16:16:48 | 11784690 | alice | `openDispute(1)` [`0xf19aea8b…164d`](https://sepolia.etherscan.io/tx/0xf19aea8bdbb4ee6dbff306ea81b9def2ffaa18a48d72b204ab2cd63ca1ed164d) | `DisputeOpened(1, alice)`, 0 periods earned |
+| 16:17:00 | 11784691 | alice | `AIArbiter.submitEvidence(1, …)` [`0xde115f10…02cb`](https://sepolia.etherscan.io/tx/0xde115f10293bd152bd0cf18d18f635c0bff8cce1d40da0bde3ff7e9af44a02cb) | E1: *"The listing for this flat said the room is 25 square metres. It is about 12 square metres, half of what was advertised. I did not accept the room and moved out the same day. I ask for my deposit and all unused rent back."* |
+| 16:17:24 | 11784693 | landlord | `AIArbiter.submitEvidence(1, …)` [`0x57260eba…2b73`](https://sepolia.etherscan.io/tx/0x57260eba4c5de9edbc5c8292a3a48c781f37d7119d26a01fa65dce15b1ff2b73) | E2: *"The listing said 25 square metres. The room is 12 square metres. The listing was wrong, and I have corrected it. The tenant left the room clean. I make no claim on the deposit or on the rent."* |
+| 16:18:00 | 11784696 | judge key `0x4a44…d0dA` | `EnsAgentRelay.propose(1, 10000, 0xdb57…9531, 9500, …)` [`0x51e5de71…922d`](https://sepolia.etherscan.io/tx/0x51e5de711ec7367f34bc67dc87d68baa261498a339be902e0087f4eb79f9922d) | The relay emits `RelayedProposal(1, judge, "judge.rentouts.eth", 10000, 0xdb57…9531)`, then `AIArbiter` emits `Proposed(1, agent = relay, tenantBps 10000, confidence 9500, deadline 16:20:00)`. 140,385 gas |
+| 16:20:24 | 11784708 | landlord | `AIArbiter.execute(1)` [`0x7b5c16f4…246d`](https://sepolia.etherscan.io/tx/0x7b5c16f4e2dc14414cbb89ed0ee10fc6ae8e8d56ba3743e153aab8600a77246d) | The window was over and nobody appealed: `Executed(1, 10000, by landlord)`, `DisputeResolved(1, 10000, 1.20 to tenant, 0 to landlord)`, 1.20 USDC to alice. Lease #1 is `CLOSED` and the ruling is `EXECUTED` |
+
+*Lease #2, left running:* a 0.30 USDC deposit plus 14 × 0.05 USDC rent, daily.
+
+| JST | Block | From | Tx | What happened |
+|---|---|---|---|---|
+| 16:18:24 | 11784698 | landlord | `createLease(alice, 300000, 50000, 86400, 14)` [`0xc151aeb1…2530`](https://sepolia.etherscan.io/tx/0xc151aeb10a6396e026536e803b8e65bab943309bfb2b1acb1efd5cb88c782530) | `LeaseCreated(2)`; 100 of token #2 to the landlord |
+| 16:18:48 | 11784700 | alice | USDC `approve(RentEscrow, 1.00)` [`0x18b39ca7…13e3`](https://sepolia.etherscan.io/tx/0x18b39ca7a3692fd79e528265a9472361047a0fe5aa62cc6fd1631fa11f2913e3) | |
+| 16:19:00 | 11784701 | alice | `fundLease(2)` [`0x3f10e4ad…1716`](https://sepolia.etherscan.io/tx/0x3f10e4ad4158709f5aa5a32142f49a36ae1da4740b1f3a765ca532228c101716) | 1.00 USDC into the escrow; `ACTIVE`, ending Sat 2026-10-10 16:19:00 JST. Rent unlocks daily |
+
+*Credential:* at 16:29:00 (block 11784751), the deployer called `CredentialSync.sync(alice)` [`0x37e4c695…fb5b`](https://sepolia.etherscan.io/tx/0x37e4c695264b2c2d5c6c8cae22b045b2c11b822f0993ec9b942ff2e1eb35fb5b) (348,889 gas), which emitted `Synced(alice, "alice", leasesCompleted 0, disputes 1)`. An earlier attempt at 16:20 sent nothing: the deployer's nonce didn't move until this tx. Read back through the Universal Resolver, `alice.rentouts.eth` now has `rentouts.leasesCompleted` = `0`, `rentouts.disputes` = `1`, `rentouts.rentPaid` = `0.00`, `rentouts.depositReturnRate` = `100` and `rentouts.escrow` = `eip155:11155111:0x2357705a8382067d9be9dada2eef70e23fa4cd18`, next to `rentouts.credential` = `tenant/v1` and `rentouts.status` = `active`. A lease closed by a ruling doesn't count as completed. `disputes` counts every dispute on her leases, whoever opened it and whoever won, so the outcome shows up in `depositReturnRate` = 100.
+
+*The AI ruling on lease #1:* GLM 5.3 (1 attempt, 3,491 ms), rules pack `tokyo-restoration v1.0.0` (hash `0xd0f5e094…2885`).
+- The model's answers: damage beyond normal wear **no** (0.97), landlord's rent claim valid **no** (0.98), evidence sufficient **yes** (0.95), severity 1.
+- Code's rubric: of the 1.20 remaining, the tenant gets the 0.50 deposit back plus the 0.70 of unearned rent, so `tenantBps` = 10000. Confidence 9500.
+- The on-chain summary ends `[tokyo-restoration v1.0.0: TKY-1, TKY-7]`.
+- `rulingHash` = `0xdb57d0bcae51782f9cc52978908761d55da8e7c7c1c5c71e2d51362e6d1b9531` (in `getRuling(1)` and the `Proposed` event). `inputHash` = `0x577d45a5bf999b4ffe57dadee848d9aeffa85a80abf2a42cbd7cb7ea0b96b568` (the lease facts plus E1 and E2).
+- The judge saved the ruling file in its gitignored `judge/out/`, so it isn't in the repo. `--verify <file> --onchain` on that file: both hashes match, and so does `getRuling(1).rulingHash` (status `EXECUTED`, tenantBps 10000).
+
+*Read back at about 16:30:*
+- Leases: `nextLeaseId` = 3. `getRuling(1)` = (3 `EXECUTED`, 10000, 9500, proposed 16:18:00, deadline 16:20:00, `0xdb57…9531`). Lease #2 is `ACTIVE` with 0 periods claimed.
+- Shares: the landlord holds 100 of `LeaseShare1155` #1 and #2.
+- `tenantStats(alice)`: funded 2, completed 0, disputed 1, periods paid 0, rent paid 0, deposits posted 0.50 and returned 0.50.
+- USDC: alice 2.00, `RentEscrow` 1.00 (lease #2), landlord 0.
+- `app/scripts/live-smoke.mjs`: all wiring checks pass with leases present (`escrow.nextLeaseId() = 3 (2 leases so far)`). It never assumed an empty escrow, so it is unchanged.
+
 ---
 
 ## Open items
@@ -227,7 +268,7 @@ Sourcify pages: `https://repo.sourcify.dev/11155111/<address>`. Etherscan needs 
 - [x] Core escrow: dispute rulings inflated `rentouts.depositReturnRate` (the tenant's share counted as deposit returned before unearned rent). Fixed in the live `RentEscrow` (unearned rent is refunded first); the README caveat now describes the new rule (Sat 03:05).
 - [x] Broadcast the issuer role cleanup: 3 `revokeRoles`, Sat 03:09. `roles()` is 0 on all five escrow-derived keys.
 - [ ] Etherscan verification of the five new contracts (Bektur, needs `ETHERSCAN_API_KEY`): `forge verify-contract <address> <Contract> --chain sepolia --verifier etherscan --constructor-args <hex> --watch`, run in the project that built it (escrow stack: `feat/ai-judge`; `CredentialSync`: `ens/`), with the constructor args from the deploy tx. Sourcify and Blockscout are done.
-- [ ] First live `sync`: after alice's demo lease closes, call `CredentialSync.sync(alice)` and read `rentouts.leasesCompleted` / `rentouts.escrow` back through the Universal Resolver.
+- [x] First live `sync`: lease #1 closed Sat 16:20, then `CredentialSync.sync(alice)` Sat 16:29 ([`0x37e4c695…fb5b`](https://sepolia.etherscan.io/tx/0x37e4c695264b2c2d5c6c8cae22b045b2c11b822f0993ec9b942ff2e1eb35fb5b)); `rentouts.leasesCompleted` / `disputes` / `rentPaid` / `depositReturnRate` / `escrow` read back through the Universal Resolver (see the Sat 16:15 entry).
 
 - [x] Claim `alice.rentouts.eth` → **gate** (22:24).
 - [x] `CredentialSync` (replaces the off-chain relayer): live at `0xd0783EC7B0668652718f3977Ca92235fe6bF9c56` (Sat 03:08), issuer on `RentoutsSubnames`, reads `RentEscrow` `0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18`.

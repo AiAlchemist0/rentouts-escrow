@@ -23,13 +23,57 @@ The demo runs on the live Sepolia deployment, broadcast Sat 2026-09-26 between 0
 
 ---
 
+## Live example: lease #1, a dispute settled by the AI judge (open this first)
+
+The live escrow already has two leases between the landlord (deployer `0xdD9c…CCCE`) and `alice.rentouts.eth`, made on Sat 2026-09-26 between 16:15 and 16:29 JST. All times below are block times. Lease #1 is the whole dispute path, done for real on Sepolia. To see both leases in the app, open the hosted app's [*Run the lease* tab](https://rentouts-escrow-demo.dofusd.workers.dev/#run): with no wallet connected it lists every lease. Every tx, with its block number, is in [docs/ens/LOG.md](./ens/LOG.md) (Sat 16:15 entry).
+
+**Lease #1: 0.50 USDC deposit + 7 × 0.10 USDC rent (daily). Disputed, AI-proposed, executed, `CLOSED`.**
+
+| JST | Step | Tx |
+|---|---|---|
+| 16:15:48 | The landlord creates lease #1 for alice; 100 `LeaseShare1155` #1 go to the landlord | [`0x82208306…e769`](https://sepolia.etherscan.io/tx/0x822083066f0ddf4706dd467b8c69bb46628c7570d3e51c0d2c0de2a9ace7e769) |
+| 16:16:24 | Alice funds 1.20 USDC. The World ID 4.0 gate lets her through, because she is registered on it (after her approve [`0x652c68bb…af71`](https://sepolia.etherscan.io/tx/0x652c68bb8b8ce32d74a94a7cc2890c1abae8394d27b0e2966bc00c0fb001af71)) | [`0xc45b64b6…1fb6`](https://sepolia.etherscan.io/tx/0xc45b64b691764e83431f22430c14cbe7dc85b80123545d7d3490cee372231fb6) |
+| 16:16:48 | Alice opens a dispute | [`0xf19aea8b…164d`](https://sepolia.etherscan.io/tx/0xf19aea8bdbb4ee6dbff306ea81b9def2ffaa18a48d72b204ab2cd63ca1ed164d) |
+| 16:17:00 | Alice's statement: *"The listing for this flat said the room is 25 square metres. It is about 12 square metres, half of what was advertised. I did not accept the room and moved out the same day. I ask for my deposit and all unused rent back."* | [`0xde115f10…02cb`](https://sepolia.etherscan.io/tx/0xde115f10293bd152bd0cf18d18f635c0bff8cce1d40da0bde3ff7e9af44a02cb) |
+| 16:17:24 | The landlord's statement: *"The listing said 25 square metres. The room is 12 square metres. The listing was wrong, and I have corrected it. The tenant left the room clean. I make no claim on the deposit or on the rent."* | [`0x57260eba…2b73`](https://sepolia.etherscan.io/tx/0x57260eba4c5de9edbc5c8292a3a48c781f37d7119d26a01fa65dce15b1ff2b73) |
+| 16:18:00 | **The AI judge proposes 100% to the tenant, as `judge.rentouts.eth`, through `EnsAgentRelay`.** The judge key `0x4a44…d0dA` called the relay, and the relay emitted `RelayedProposal(…, "judge.rentouts.eth", 10000, …)`. `AIArbiter` emitted `Proposed` with `agent` = the relay, confidence 95% and an appeal deadline of 16:20:00. The on-chain summary cites the Tokyo rules: *"… [tokyo-restoration v1.0.0: TKY-1, TKY-7]"* | [`0x51e5de71…922d`](https://sepolia.etherscan.io/tx/0x51e5de711ec7367f34bc67dc87d68baa261498a339be902e0087f4eb79f9922d) |
+| 16:20:24 | Nobody appealed in the 120 s window, so the landlord executed. `DisputeResolved`: 1.20 USDC to alice, 0 to the landlord. Lease #1 is `CLOSED` | [`0x7b5c16f4…246d`](https://sepolia.etherscan.io/tx/0x7b5c16f4e2dc14414cbb89ed0ee10fc6ae8e8d56ba3743e153aab8600a77246d) |
+| 16:29:00 | `CredentialSync.sync(alice)`, sent by the deployer (anyone may call it). `alice.rentouts.eth` now reads `rentouts.leasesCompleted` 0, `rentouts.disputes` 1, `rentouts.rentPaid` 0.00 and `rentouts.depositReturnRate` 100. A lease closed by a ruling isn't "completed"; the refund shows as a 100% deposit return | [`0x37e4c695…fb5b`](https://sepolia.etherscan.io/tx/0x37e4c695264b2c2d5c6c8cae22b045b2c11b822f0993ec9b942ff2e1eb35fb5b) |
+
+**The AI ruling** (z.ai GLM 5.3, 3.5 s):
+- The model answered: damage beyond normal wear *no* (0.97), landlord's rent claim valid *no* (0.98), evidence sufficient *yes* (0.95).
+- Code then computed the split: the 0.50 deposit back plus the 0.70 of rent not yet earned, so `tenantBps` = 10000.
+- `rulingHash` `0xdb57d0bcae51782f9cc52978908761d55da8e7c7c1c5c71e2d51362e6d1b9531` is on-chain in `getRuling(1)`. Its `inputHash` `0x577d45a5bf999b4ffe57dadee848d9aeffa85a80abf2a42cbd7cb7ea0b96b568` commits to the lease facts and both statements.
+- The judge's saved ruling file (gitignored `judge/out/`) passes `--verify --onchain` against `getRuling(1)`.
+
+**Lease #2: 0.30 USDC deposit + 14 × 0.05 USDC rent (daily). Funded, `ACTIVE` until Sat 2026-10-10 16:19 JST.**
+- Created at 16:18:24: [`0xc151aeb1…2530`](https://sepolia.etherscan.io/tx/0xc151aeb10a6396e026536e803b8e65bab943309bfb2b1acb1efd5cb88c782530).
+- Funded by alice at 16:19:00 with 1.00 USDC: [`0x3f10e4ad…1716`](https://sepolia.etherscan.io/tx/0x3f10e4ad4158709f5aa5a32142f49a36ae1da4740b1f3a765ca532228c101716), after her approve [`0x18b39ca7…13e3`](https://sepolia.etherscan.io/tx/0x18b39ca7a3692fd79e528265a9472361047a0fe5aa62cc6fd1631fa11f2913e3).
+- A period of rent unlocks each day, and the landlord holds its 100 shares.
+
+Check it yourself (read-only):
+
+```bash
+RPC=https://ethereum-sepolia-rpc.publicnode.com
+cast call 0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18 "nextLeaseId()(uint256)" --rpc-url $RPC   # 3
+# lease: (landlord, tenant, deposit, rentPerPeriod, periodSeconds, periods, periodsClaimed, startTime, state); state 4 = CLOSED, 2 = ACTIVE
+cast call 0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18 "getLease(uint256)((address,address,uint128,uint128,uint32,uint16,uint16,uint64,uint8))" 1 --rpc-url $RPC
+# ruling: (status 3 = EXECUTED, tenantBps 10000, confidenceBps 9500, proposedAt, deadline, rulingHash 0xdb57…9531)
+cast call 0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5 "getRuling(uint256)((uint8,uint16,uint16,uint64,uint64,bytes32))" 1 --rpc-url $RPC
+cast call 0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18 "getLease(uint256)((address,address,uint128,uint128,uint32,uint16,uint16,uint64,uint8))" 2 --rpc-url $RPC
+```
+
+Alice's synced records are on her public credential card, read through the ENSv2 Universal Resolver: [`?name=alice.rentouts.eth#identity`](https://rentouts-escrow-demo.dofusd.workers.dev/?name=alice.rentouts.eth#identity).
+
+---
+
 ## Cast
 
 Two accounts in one MetaMask, switched between steps. The app follows whichever account is selected. Two more keys are used only from a terminal.
 
 | Role | Account | Where | Needs |
 |---|---|---|---|
-| **Tenant: alice** | `0x484811c8c967809bE644A89d677933c29fb9e936`, holds `alice.rentouts.eth` (Foundry keystore `rentouts-alice`) | MetaMask and terminal | ~0.01 Sepolia ETH (she has 0.01), **≥ 3.0 test USDC** (she has 3.0 since Sat 12:56 JST; 2.0 is the bare minimum), and **registered in the live `WorldIdV4Gate`** (see pre-flight step 0) |
+| **Tenant: alice** | `0x484811c8c967809bE644A89d677933c29fb9e936`, holds `alice.rentouts.eth` (Foundry keystore `rentouts-alice`) | MetaMask and terminal | ~0.01 Sepolia ETH (she has about 0.0095 after the first live leases), **≥ 2.0 test USDC** (she holds exactly 2.0 since Sat 16:20 JST: lease #1 came back in full, and lease #2 locks 1.0 until 10 Oct; add a faucet claim for slack), and **registered in the live `WorldIdV4Gate`** (see pre-flight step 0) |
 | **Landlord: deployer** | `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE` (keystore `rentouts-deployer`). Allowlisted on `LeaseShare1155` by `DeployEscrow`; also owns the share contract and the `HumanGate`. | MetaMask and terminal | ~0.02 Sepolia ETH |
 | **AI judge** | `0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA` (keystore `rentouts-judge`), the holder of **`judge.rentouts.eth`**. `AIArbiter.agent` is the `EnsAgentRelay` `0xe56E…C3eE`, so the key proposes only through the relay, and only while it holds the name. It only ever calls `propose`. | terminal: `JUDGE_RELAY=0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE ./run.sh` in `judge/` | ~0.01 Sepolia ETH |
 | **Human arbiter** | `0x798b01Cef62b889943Ce1D3C5011a755B297e486`, which is `AIArbiter.human`. It bound the escrow once, made the relay the agent (`setAgent`, Sat 12:51 JST), and rules on appealed or abstained leases (`resolveByHuman`). | terminal (its own keystore) | ~0.005 Sepolia ETH |
@@ -40,7 +84,7 @@ Two more addresses are only typed in, never connected:
 - **Investor**: a team-controlled EOA with no other demo role. The share owner allowlists it in pre-flight.
 - **Stranger**: `0x000000000000000000000000000000000000dEaD`, which is not allowlisted.
 
-**Demo lease terms:** deposit **0.20**, rent **0.10** per period, period **60** seconds, **3** periods. Alice prepays 0.50 USDC per lease, and each lease runs 3 minutes. (The app's defaults are larger: 0.25 / 0.20 / 120 s / 3.) The demo uses four leases (A, B, C and the one created live), so alice needs at least 2.0 USDC. She holds **3.0** since Sat 12:56 JST (1.0 USDC from the deployer in [`0xb315f812…a170`](https://sepolia.etherscan.io/tx/0xb315f812ad413cc9b4bd9115b040719bb903303db7e706bcc4c644168515a170), block 11783705), which leaves 1.0 USDC of slack for a mistyped term or a re-created lease. Type 0.20 / 0.10 / 60 / 3 exactly.
+**Demo lease terms:** deposit **0.20**, rent **0.10** per period, period **60** seconds, **3** periods. Alice prepays 0.50 USDC per lease, and each lease runs 3 minutes. (The app's defaults are larger: 0.25 / 0.20 / 120 s / 3.) The demo uses four leases (A, B, C and the one created live), so alice needs at least 2.0 USDC. She held 3.0 from Sat 12:56 JST (1.0 USDC from the deployer in [`0xb315f812…a170`](https://sepolia.etherscan.io/tx/0xb315f812ad413cc9b4bd9115b040719bb903303db7e706bcc4c644168515a170), block 11783705). After the first live leases she holds **2.0**: lease #1 refunded her 1.20 in full, and lease #2 locks 1.00 until 10 Oct (see *Live example* above). That is exactly four leases with no slack, so claim 1 USDC from a faucet first in case of a mistyped term or a re-created lease. Type 0.20 / 0.10 / 60 / 3 exactly. The next lease id is 3, so the new leases get ids 3 and up.
 
 ---
 
@@ -105,7 +149,7 @@ JUDGE=0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA    # the judge key = judge.rent
    cast send ${SHARES} "setAllowlist(address,bool)" <INVESTOR> true \
      --account rentouts-deployer --rpc-url ${SEPOLIA_RPC_URL}
    ```
-8. **Pre-stage three leases.** All use the demo terms; the landlord creates each in the app and alice approves and funds it.
+8. **Pre-stage three leases.** All use the demo terms; the landlord creates each in the app and alice approves and funds it. Leases #1 and #2 already exist (see *Live example*), and neither can stand in for A, B or C. #1 is closed. #2 has daily periods and runs until 10 Oct, so it can't close on camera. The new leases get ids 3 and up. B and C replay on camera what lease #1 already shows on-chain (dispute, proposal through `judge.rentouts.eth`, execution), so #1's txs are the backup if a live step fails.
    - **Lease A** (for claim and close): fund it **at least 4 minutes before recording**, so its term has ended when you reach it.
    - **Lease B** (for the live AI ruling): alice clicks **Open dispute** in the app, then both parties post a statement:
      ```bash
@@ -117,7 +161,7 @@ JUDGE=0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA    # the judge key = judge.rent
        --account rentouts-alice --rpc-url ${SEPOLIA_RPC_URL}
      ```
    - **Lease C** (for execute): the same as B, then run the judge on it **at least 3 minutes before recording** (`JUDGE_RELAY=${RELAY} ./run.sh --lease <C> --propose`), and don't appeal. Its 120 s window is then over, so it is executable on camera. Check it with `cast call ${ARB} "getRuling(uint256)((uint8,uint16,uint16,uint64,uint64,bytes32))" <C> --rpc-url ${SEPOLIA_RPC_URL}`: status `1` (PROPOSED) and a deadline in the past.
-9. **Sync alice once**, so her card shows real numbers before the demo adds to them: landlord, tab *Run the lease*, a closed lease, *Sync tenant's credential to ENS*.
+9. **Sync alice once**, so her card shows real numbers before the demo adds to them: landlord, tab *Run the lease*, a closed lease, *Sync tenant's credential to ENS*. **Done** after lease #1 closed: `CredentialSync.sync(alice)` on Sat 16:29 JST ([`0x37e4c695…fb5b`](https://sepolia.etherscan.io/tx/0x37e4c695264b2c2d5c6c8cae22b045b2c11b822f0993ec9b942ff2e1eb35fb5b)). Her card reads 0 completed, 1 dispute, 0.00 rent paid, 100% deposit returned. After lease A closes on camera (1:20–1:45), the sync makes it **1 completed**. Re-sync here only if another lease closes before recording.
 10. **Screen.** Browser tabs: the app on `#identity`, the app on `?name=alice.rentouts.eth#identity` (her public credential), and Blockscout on `AIArbiter` (its verified source and events). A terminal in `judge/` with the commands for B and C typed in.
 
 ---
@@ -136,7 +180,7 @@ JUDGE=0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA    # the judge key = judge.rent
 | 2:30–2:50 | **landlord** | **5 Lease shares** | Transfer 10 shares of lease #N to **the investor**, which succeeds. Then try the **stranger** `0x…dEaD`. | The first transfer goes through. For the second, the app warns *isn't on the compliance allowlist*, and the pre-flight simulation shows `NotAllowlisted` before MetaMask even opens. |
 | 2:50–3:05 | (any) | `?name=alice.rentouts.eth` | Open alice's public credential link. | The same record, readable by any ENS-aware app. No RentOuts API is involved. |
 
-**After recording.** Lease B's proposal stays open for 120 s. Leave it to execute (anyone can), or show an appeal (`appeal(uint256)` from alice or the landlord) and a human ruling. **Lease #N**, created live at 0:35, keeps running: close it later, or leave it `ACTIVE` as a live example for judges.
+**After recording.** Lease B's proposal stays open for 120 s. Leave it to execute (anyone can), or show an appeal (`appeal(uint256)` from alice or the landlord) and a human ruling. **Lease #N**, created live at 0:35, keeps running: close it later, or leave it `ACTIVE`. Lease #2 is already the long-running `ACTIVE` example for judges (until 10 Oct), and lease #1 is the finished dispute.
 
 ---
 
@@ -151,7 +195,7 @@ JUDGE=0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA    # the judge key = judge.rent
 | `createLease` fails with `InvalidTerms` | Check that the period is ≥ 60 s, the tenant isn't the landlord, and neither is the arbiter. |
 | `fundLease` fails with `NotVerifiedHuman` | The World verifier is plugged in and this wallet isn't registered on it. Check pre-flight step 0 (`verifier()` must be `WORLD`, where alice is registered). Use a registered tenant, or, as a last resort, have the gate owner reopen the gate: `cast send ${GATE} "setVerifier(address)" 0x0000000000000000000000000000000000000000 --account rentouts-deployer --rpc-url ${SEPOLIA_RPC_URL}`. |
 | The judge prints **ABSTAIN, escalated to human arbiter** | That is the safety valve working: say so. It also abstains when only one side has posted, so check that both statements landed. The human arbiter rules instead: `cast send ${ARB} "resolveByHuman(uint256,uint16)" <B> 5000 --account <human arbiter keystore> --rpc-url ${SEPOLIA_RPC_URL}`. |
-| The model API errors or is slow | Re-run with `--provider mock` and say it is the deterministic offline stand-in (keyword matching, not a judge). A mock proposal says so on-chain: its summary starts with `[mock judge, keyword matching]`. |
+| The model API errors or is slow | Re-run with `--provider mock` and say it is the deterministic offline stand-in (keyword matching, not a judge). A mock proposal says so on-chain: its summary starts with `[mock judge, keyword matching]`. Or show lease #1's real GLM 5.3 proposal through the relay ([`0x51e5de71…922d`](https://sepolia.etherscan.io/tx/0x51e5de711ec7367f34bc67dc87d68baa261498a339be902e0087f4eb79f9922d)) and its execution ([`0x7b5c16f4…246d`](https://sepolia.etherscan.io/tx/0x7b5c16f4e2dc14414cbb89ed0ee10fc6ae8e8d56ba3743e153aab8600a77246d)). |
 | The judge refuses to propose (`refused: …`) | Read the message. `JUDGE_RELAY is …, but AIArbiter.agent() is …`: `agent()` must be `RELAY`; if the human rolled back to the judge key, drop `JUDGE_RELAY`. `the relay's ENS judge is …`: `cast call ${RELAY} "judge()(address)"` must be `JUDGE`. `judge.rentouts.eth resolves to …` / `does not resolve`: check `cast resolve-name judge.rentouts.eth` (a public RPC hiccup: retry, or set `SEPOLIA_RPC_URL`). Last resort, the human rolls back: `cast send ${ARB} "setAgent(address)" ${JUDGE} --account <human arbiter keystore> --rpc-url ${SEPOLIA_RPC_URL}` (`../sign-judge-name.sh rollback`), then run the judge without `JUDGE_RELAY`. **Never revoke `judge.rentouts.eth`**: labels are single-use, so it could not be issued again. |
 | The judge says the lease isn't disputed or the escrow's arbiter doesn't match | Open the dispute first, and check `ARB` is bound (`escrow()`) to the escrow the app uses. |
 | `execute` reverts `ChallengeWindowOpen` | The 120 s window isn't over yet. Use Lease C, which was proposed earlier. |
@@ -218,7 +262,7 @@ npm run judge -- --verify out/ruling-11155111-0xc3d50752a1f42cc54d3c90a1261779ee
 cast call $(cast call ${ESCROW} "humanGate()(address)" --rpc-url ${SEPOLIA_RPC_URL}) "verifier()(address)" --rpc-url ${SEPOLIA_RPC_URL}
 ```
 
-ENS gates the AI judge, shown live with simulations only (nothing is sent). Lease 1 is used as a placeholder id:
+ENS gates the AI judge, shown live with simulations only (nothing is sent). They use lease 1, which is `CLOSED` since Sat 16:20 JST, so the last one can't propose either (re-checked at 16:33 JST):
 
 ```bash
 H=0x0000000000000000000000000000000000000000000000000000000000000001
@@ -226,7 +270,7 @@ H=0x0000000000000000000000000000000000000000000000000000000000000001
 cast call ${ARB} "propose(uint256,uint16,bytes32,uint16,string)" 1 5000 ${H} 9000 x --from ${JUDGE} --rpc-url ${SEPOLIA_RPC_URL}
 # A wallet without judge.rentouts.eth is refused by the relay: reverts 0x04135e48 = NotEnsJudge(caller, holder = JUDGE)
 cast call ${RELAY} "propose(uint256,uint16,bytes32,uint16,string)" 1 5000 ${H} 9000 x --from 0x000000000000000000000000000000000000dEaD --rpc-url ${SEPOLIA_RPC_URL}
-# The name's holder gets through the relay to AIArbiter, which then checks the lease: reverts 0x7ead52b7 = NotDisputed(1, 0)
+# The name's holder gets through the relay to AIArbiter, which then checks the lease: reverts 0x7ead52b7 = NotDisputed(1, 4), 4 = CLOSED
 cast call ${RELAY} "propose(uint256,uint16,bytes32,uint16,string)" 1 5000 ${H} 9000 x --from ${JUDGE} --rpc-url ${SEPOLIA_RPC_URL}
 ```
 

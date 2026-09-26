@@ -38,7 +38,7 @@ The two `WorldIdV4Gate`s run the same code and differ only in the action fixed a
 
 **Machine-readable addresses:** [`deployments.json`](../deployments.json) and [`ens/deployments/sepolia.json`](../ens/deployments/sepolia.json).
 
-### Live state (Sat 2026-09-26, 12:45 JST, block 11783652; the AI judge and alice re-read at 13:40 JST)
+### Live state (Sat 2026-09-26, 12:45 JST, block 11783652; the AI judge re-read at 13:40 JST; leases and alice at 16:30 JST)
 
 **World ID is on, through the second gate.**
 - `HumanGate.verifier()` has been `WorldIdV4Gate` `0x5Cb8…aABa` (`fund-lease-wallet`) since tx [`0xcd93549e…eb86671`](https://sepolia.etherscan.io/tx/0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671) (block 11783640, 12:42 JST). The gate owner sent it, and `VerifierUpdated` records the switch from the first gate.
@@ -56,9 +56,14 @@ The two `WorldIdV4Gate`s run the same code and differ only in the action fixed a
 - So the judge key's direct `AIArbiter.propose` reverts `NotAgent`, any other wallet's `relay.propose` reverts `NotEnsJudge`, and revoking the name would stop AI proposals (the human still rules). The live name is never revoked, because labels are single-use; that case is a fork test.
 - `deployments.json` records it: `sepoliaAIArbiter.agent` is the relay, with `judgeKey`, `judgeName` and `agentSince`, and `sepoliaEnsAgentRelay` has the deploy and `setAgent` txs.
 
-**Alice holds 3.0 test USDC** (1.0 from the deployer at 12:56 JST, [`0xb315f812…a170`](https://sepolia.etherscan.io/tx/0xb315f812ad413cc9b4bd9115b040719bb903303db7e706bcc4c644168515a170), block 11783705), enough for the four demo leases.
+**The first live leases (Sat 16:15–16:29 JST, block times): a real dispute, settled by the AI judge through its ENS name.** `nextLeaseId()` is 3. Both leases are between the landlord (deployer `0xdD9c…CCCE`) and `alice.rentouts.eth`. The walkthrough is in [DEMO.md, *Live example*](./DEMO.md#live-example-lease-1-a-dispute-settled-by-the-ai-judge-open-this-first), and every tx is in the [LOG](./ens/LOG.md) (Sat 16:15 entry).
+- **Lease #1** (0.50 USDC deposit + 7 × 0.10 rent, daily) is `CLOSED`. Alice [funded it](https://sepolia.etherscan.io/tx/0xc45b64b691764e83431f22430c14cbe7dc85b80123545d7d3490cee372231fb6) through the World ID gate, then [opened a dispute](https://sepolia.etherscan.io/tx/0xf19aea8bdbb4ee6dbff306ea81b9def2ffaa18a48d72b204ab2cd63ca1ed164d): *"the listing said 25 m², the room is 12 m²"*. The landlord's statement admitted it.
+- At 16:18 the AI judge (GLM 5.3) proposed 100% to the tenant as **`judge.rentouts.eth` through `EnsAgentRelay`** ([`0x51e5de71…922d`](https://sepolia.etherscan.io/tx/0x51e5de711ec7367f34bc67dc87d68baa261498a339be902e0087f4eb79f9922d)). It did so with confidence 95%, citing Tokyo rules TKY-1 and TKY-7, with `rulingHash` `0xdb57d0bc…1b9531` and `inputHash` `0x577d45a5…96b568`.
+- Nobody appealed within 120 s. At 16:20 the landlord executed it ([`0x7b5c16f4…246d`](https://sepolia.etherscan.io/tx/0x7b5c16f4e2dc14414cbb89ed0ee10fc6ae8e8d56ba3743e153aab8600a77246d)), and alice got her 1.20 USDC back.
+- **Lease #2** (0.30 + 14 × 0.05, daily) is funded ([`0x3f10e4ad…1716`](https://sepolia.etherscan.io/tx/0x3f10e4ad4158709f5aa5a32142f49a36ae1da4740b1f3a765ca532228c101716)) and `ACTIVE` until 10 Oct. `LeaseShare1155` #1 and #2: the landlord holds 100 of each.
+- **First live `CredentialSync.sync(alice)`** at 16:29 ([`0x37e4c695…fb5b`](https://sepolia.etherscan.io/tx/0x37e4c695264b2c2d5c6c8cae22b045b2c11b822f0993ec9b942ff2e1eb35fb5b)). Through the Universal Resolver, `alice.rentouts.eth` now reads `rentouts.leasesCompleted` 0, `rentouts.disputes` 1, `rentouts.rentPaid` 0.00, `rentouts.depositReturnRate` 100 and `rentouts.escrow` `eip155:11155111:0x2357…cd18`.
 
-**The escrow has no leases yet** (`nextLeaseId() == 1`). `alice.rentouts.eth` resolves. Its escrow-derived records appear after her first lease and a `CredentialSync.sync`.
+**Alice holds 2.0 test USDC:** 3.0 after the deployer's 1.0 at 12:56 JST ([`0xb315f812…a170`](https://sepolia.etherscan.io/tx/0xb315f812ad413cc9b4bd9115b040719bb903303db7e706bcc4c644168515a170), block 11783705), minus the 1.00 locked in lease #2. Lease #1 came back in full.
 
 Check any of this yourself:
 
@@ -68,7 +73,8 @@ cast call 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd "verifier()(address)" --rpc
 cast call 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd "isVerified(address)(bool)" 0x484811c8c967809bE644A89d677933c29fb9e936 --rpc-url $RPC  # true (alice)
 cast resolve-name alice.rentouts.eth --rpc-url $RPC                                       # 0x4848…e936
 cast call 0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18 "humanGate()(address)" --rpc-url $RPC  # HumanGate
-cast call 0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18 "nextLeaseId()(uint256)" --rpc-url $RPC  # 1 (no leases yet)
+cast call 0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18 "nextLeaseId()(uint256)" --rpc-url $RPC  # 3 (leases #1 and #2)
+cast call 0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5 "getRuling(uint256)((uint8,uint16,uint16,uint64,uint64,bytes32))" 1 --rpc-url $RPC  # (3 EXECUTED, 10000, 9500, …, 0xdb57…9531)
 cast call 0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5 "agent()(address)" --rpc-url $RPC      # 0xe56E…C3eE (EnsAgentRelay)
 cast call 0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE "judge()(address)" --rpc-url $RPC      # 0x4a44…d0dA
 cast resolve-name judge.rentouts.eth --rpc-url $RPC                                        # 0x4a44…d0dA
@@ -165,6 +171,8 @@ World ID gates one thing: who may fund a new lease.
 | Sat 12:56 | alice topped up to 3.0 test USDC | block 11783705 |
 | Sat 13:02–13:08 | PRs #14–#16 merged (QA pass, Tokyo rules, combined gate) | merge commits |
 | Sat 13:11–13:14 | PRs #17–#18 merged (submission docs, counts) | merge commits |
+| Sat 16:15–16:20 | First live leases: lease #1 funded through the World ID gate, disputed, proposed by `judge.rentouts.eth` through `EnsAgentRelay` and executed; lease #2 funded and left active | blocks 11784685–11784708 |
+| Sat 16:29 | First live `CredentialSync.sync(alice)`: her escrow-derived ENS records | block 11784751 |
 
 Commit rows use git author times and on-chain rows use block times. Branches were rebased before merging, so `git log` order isn't strictly chronological. Squash-merged PRs show their merge time.
 
