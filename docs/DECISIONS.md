@@ -160,7 +160,7 @@ Short architecture decision records (ADRs) for RentOuts Escrow at ETHGlobal Toky
 **Consequences.**
 - The gate owner decides only **who may fund a new lease**. It holds no tokens and cannot move, freeze or redirect funds. `claimRent`, `closeLease`, `openDispute` and `resolveDispute` never consult it, so a funded lease runs to the end whatever the gate says (tested).
 - A verifier that reverts makes funding fail closed until the owner fixes or clears it. `setVerifier` refuses a non-contract (`VerifierHasNoCode`).
-- Until the World verifier is set there is no proof of personhood. One name per address is the only sybil friction. The issuer can reflect a passed check in `rentouts.verified`. (Superseded Sat 12:09 JST: the verifier is a `WorldIdV4Gate`, [`0x56b47b25…43e8ee`](https://sepolia.etherscan.io/tx/0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee); see ADR-12.)
+- The World verifier is set: `HumanGate.verifier` is `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa` since Sat 12:42 JST (a first gate from 12:09, see ADR-12), and only a registered wallet can fund a new lease. One name per address remains the ENS sybil friction. The issuer can reflect a passed check in `rentouts.verified`.
 - The owner is a single EOA on testnet; in production it would be a Safe.
 
 ## ADR-11: An AI judge that only proposes; a human has the last word

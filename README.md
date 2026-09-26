@@ -116,7 +116,7 @@ The script records `chainId`, `deployer`, `token`, `arbiter`, `humanGate`, `rent
 
 The script makes the escrow the `LeaseShare1155` minter and allowlists the deployer as the demo landlord, so it refuses an `ESCROW_ARBITER` equal to the deployer (an arbiter that is also a party could open a dispute and rule the whole escrow to itself; `RentEscrow` rejects such leases anyway). It is **one `LeaseShare1155` per `RentEscrow`**: lease ids restart at 1 in every escrow and `tokenId == leaseId`, so the script refuses a `LEASE_SHARE` that is already wired to an escrow (or already holds shares of tokenId 1). To redeploy the escrow, let it deploy a new share contract. Every other landlord has to be allowlisted by the share owner before they can list: `cast send <leaseShare1155> "setAllowlist(address,bool)" <landlord> true --account rentouts-deployer --rpc-url sepolia`. With the new `HumanGate`, the deploy estimates at ~4.4M gas on a local node (about 0.0044 ETH at 1 gwei), which the ETHGlobal faucet's 0.05 Sepolia ETH covers.
 
-Plugging World ID in is one call from the gate owner, with no escrow redeploy: `cast send <humanGate> "setVerifier(address)" <WorldIdV4Gate> --account rentouts-deployer --rpc-url sepolia` (done on Sepolia, see below).
+Plugging World ID in is one call from the gate owner, with no escrow redeploy: `cast send <humanGate> "setVerifier(address)" <WorldIdV4Gate> --account rentouts-deployer --rpc-url sepolia`. On Sepolia the gate owner called `setVerifier(0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa)` in [`0xcd93549e…b86671`](https://sepolia.etherscan.io/tx/0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671) (see below).
 
 **Demo amounts:** the ETHGlobal faucet hands out 1 USDC on Sepolia per claim, so keep demo leases small. For example, `createLease(tenant, 300000, 100000, 60, 3)` escrows a 0.30 USDC deposit + 3 × 0.10 USDC rent at 60-second periods (0.60 USDC total).
 
@@ -269,7 +269,7 @@ flowchart TB
   classDef side fill:#1a2436,stroke:#8aa0c8,stroke-width:1.5px,color:#e6efff
 
   Phone["iPhone World App<br/>Proof of Human"]:::person
-  Page["IDKit page<br/>signal = tenant wallet"]:::world
+  Page["IDKit page<br/>action fund-lease-wallet<br/>signal = tenant wallet"]:::world
   API["World verify API<br/>protocol 4.0"]:::world
   V4["WorldIdV4Gate<br/>register(wallet, nullifier, sig)"]:::world
   Gate["HumanGate<br/>isVerified(tenant)"]:::world

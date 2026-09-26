@@ -88,7 +88,7 @@ SYNC=0xd0783EC7B0668652718f3977Ca92235fe6bF9c56     # CredentialSync
    cast call ${ARB} "human()(address)"  --rpc-url ${SEPOLIA_RPC_URL}   # = 0x798b01Cef62b889943Ce1D3C5011a755B297e486
    cast call ${ARB} "challengeWindow()(uint32)" --rpc-url ${SEPOLIA_RPC_URL}   # = 120
    cast call ${ESCROW} "arbiter()(address)" --rpc-url ${SEPOLIA_RPC_URL}   # = ARB
-   cast call ${GATE} "verifier()(address)" --rpc-url ${SEPOLIA_RPC_URL}    # = WORLD (WorldIdV4Gate, see step 0); 0x0000…0000 would mean the gate is open
+   cast call ${GATE} "verifier()(address)" --rpc-url ${SEPOLIA_RPC_URL}    # = WORLD = 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa (see step 0); 0x0000…0000 would mean the gate is open
    ```
 6. **The judge runs.** In `judge/`: `npm ci`. `run.sh` loads the team secrets file (it provides `ZAI_API_KEY`; the script never prints it). Check that `npm run judge -- --input fixtures/damage-admitted.json --provider mock` prints a ruling.
 7. **Allowlist the investor** (share owner = deployer):
@@ -205,7 +205,7 @@ cast call ${ARB} "getRuling(uint256)((uint8,uint16,uint16,uint64,uint64,bytes32)
 # inputHash; --onchain also compares the file with AIArbiter.getRuling(leaseId). The arbiter is lowercase in the name:
 npm run judge -- --verify out/ruling-11155111-<aiArbiter>-<leaseId>.json --onchain
 npm run judge -- --verify out/ruling-11155111-0xc3d50752a1f42cc54d3c90a1261779eef5bbdcb5-<leaseId>.json --onchain
-# The human gate: must print WORLD (the WorldIdV4Gate alice is registered on); 0 would mean open
+# The human gate: must print WORLD = 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa (the WorldIdV4Gate alice is registered on); 0 would mean open
 cast call $(cast call ${ESCROW} "humanGate()(address)" --rpc-url ${SEPOLIA_RPC_URL}) "verifier()(address)" --rpc-url ${SEPOLIA_RPC_URL}
 ```
 

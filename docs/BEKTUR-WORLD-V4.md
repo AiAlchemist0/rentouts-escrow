@@ -1,8 +1,6 @@
-# Bektur: World ID 4.0 is on, and alice is registered on the live gate
+# Bektur: HumanGate points at the wallet gate
 
-**Done Sat 12:42 JST:** `HumanGate` `0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd` `verifier()` is `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa` (tx `0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671`, block 11783640). Alice is registered there, so she can `fundLease`; every other wallet reverts `NotVerifiedHuman`.
-
-The first `setVerifier` (Sat 12:09 JST): tx `0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee`, block 11783482, from `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE`. `verifier()` was then `0x27052bD69b3d961940bCD093C21ba729b6c1B209`, which has zero `HumanRegistered` events, so until 12:42 every `fundLease` reverted `NotVerifiedHuman`, including alice. That gate is superseded. Rollback is `setVerifier(address(0))` from your deployer. Do **not** redeploy `RentEscrow`.
+`setVerifier` tx `0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671`, block 11783640, from `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE`. `HumanGate` `0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd` `verifier()` is `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`. `isVerified(alice 0x484811c8c967809bE644A89d677933c29fb9e936)` is `true`. The first gate `0x27052bD69b3d961940bCD093C21ba729b6c1B209` (action `fund-lease`) is superseded and unused. Rollback is `setVerifier(address(0))` from your deployer. Do **not** redeploy `RentEscrow`.
 
 ## What this is
 
@@ -45,19 +43,11 @@ This iPhone already spent its one `fund-lease` nullifier, so alice cannot be reg
 
 **`0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`**
 
-Action `fund-lease-wallet`. Deploy tx `0xde17d046d4e00c95ac09af3fa4e29d4245ca0008ed2a36cbfdf81e053c161dfe`. Same RP signer. Alice is registered. Tx `0xdbbfc6dd08fdaa4da200b51e6515a7b60423a7c3f94feb06f4a3b28f65148908`, block 11783569. `isVerified(0x484811c8c967809bE644A89d677933c29fb9e936)` is `true` on this gate. Your only new transaction:
-
-```bash
-cast send 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd \
-  "setVerifier(address)" 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa \
-  --account rentouts-deployer --rpc-url https://ethereum-sepolia-rpc.publicnode.com
-```
-
-Sent Sat 12:42 JST: tx `0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671`, block 11783640. `HumanGate` now points at this gate, so alice can fund.
+Action `fund-lease-wallet`. Deploy tx `0xde17d046d4e00c95ac09af3fa4e29d4245ca0008ed2a36cbfdf81e053c161dfe`. Same RP signer. Alice is registered. Tx `0xdbbfc6dd08fdaa4da200b51e6515a7b60423a7c3f94feb06f4a3b28f65148908`, block 11783569. Your switch tx is `0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671`. `HumanGate` now points here, so alice can `fundLease` and an unregistered wallet still cannot.
 
 ## Already on-chain
 
-`WorldIdV4Gate` `0x27052bD69b3d961940bCD093C21ba729b6c1B209` is Sourcify-verified. Deploy tx `0xf6009731cf6bd6431914961d33746cc7bfc8cd626e730f31df0f333d0a6a199c`. Signer `0xbb80c666Ed8E8B5ec45481f911c7a892f8A842CA`. Action `fund-lease`. Your first `setVerifier` tx is `0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee`; the second, to `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`, is `0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671`.
+Superseded `WorldIdV4Gate` `0x27052bD69b3d961940bCD093C21ba729b6c1B209` (action `fund-lease`, deploy tx `0xf6009731cf6bd6431914961d33746cc7bfc8cd626e730f31df0f333d0a6a199c`) is unused. The live gate is `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`. Signer on both is `0xbb80c666Ed8E8B5ec45481f911c7a892f8A842CA`.
 
 Rollback, from your deployer only:
 

@@ -295,13 +295,15 @@ Both are Sourcify `exact_match`, have signer `0xbb80c666Ed8E8B5ec45481f911c7a892
 | Developer Portal app | RentOuts Escrow, team RentOuts |
 | `app_id` | `app_2432bfa166623cfbbf813744d0b4b00c` |
 | `rp_id` | `rp_9152be24431cdfcd` |
-| Action | `fund-lease` |
-| Signal | `rentouts-fund-lease` for that first run. For `register`, the signal is the tenant wallet (action `fund-lease-wallet`). |
+| First action (spent, not registered) | `fund-lease`, signal `rentouts-fund-lease` |
+| Live action | `fund-lease-wallet`, signal Alice `0x484811c8c967809bE644A89d677933c29fb9e936` |
+| Live gate | `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`, `register` tx `0xdbbfc6dd08fdaa4da200b51e6515a7b60423a7c3f94feb06f4a3b28f65148908` |
+| `setVerifier` | `0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671`, block 11783640 |
 | Credential | `proof_of_human` |
 | Verify | `POST https://developer.world.org/api/v4/verify/rp_9152be24431cdfcd` → HTTP 200, `success: true`, `environment: production`, `protocol_version: 4.0` |
 | Registration | production and staging RP status `registered` |
 
-The phone does not talk to the escrow. The Mac page builds an RP-signed IDKit request (the signing key stays on the server, never in the client or this repo). World App on the iPhone approves the proof. IDKit returns it. The server forwards that payload unchanged to World's verify API. Only a `success: true` result means the person is a unique human for `fund-lease`.
+The phone does not talk to the escrow. The Mac page builds an RP-signed IDKit request (the signing key stays on the server, in `~/.rentouts-world.env`, never in the client or this repo). World App on the iPhone approves the proof. IDKit returns it. The server forwards that payload unchanged to World's verify API. Only a `success: true` result for action `fund-lease-wallet` is signed onto a wallet. The first `fund-lease` proof was spent on a text signal and was never registered.
 
 ```mermaid
 sequenceDiagram
@@ -314,13 +316,13 @@ sequenceDiagram
     participant RE as RentEscrow
     participant V4 as WorldIdV4Gate
     actor T as Tenant wallet
-    Sign->>Page: rp_context for the action, signal = tenant wallet
+    Sign->>Page: rp_context for action fund-lease-wallet, signal = tenant wallet
     Page->>Phone: QR / connector URI
     Phone-->>Page: Proof of Human (protocol 4.0)
     Page->>World: POST /api/v4/verify/rp_9152be24431cdfcd
     World-->>Page: success, nullifier
     Sign->>V4: register(wallet, nullifier, deadline, RP signature), anyone may send it
-    Note over HG,V4: HumanGate.verifier = WorldIdV4Gate (setVerifier, once)
+    Note over HG,V4: HumanGate.verifier = WorldIdV4Gate fund-lease-wallet (setVerifier, Sat 12:42 JST)
     T->>RE: fundLease
     RE->>HG: isVerified(tenant)
     HG->>V4: isVerified(tenant)
@@ -719,6 +721,7 @@ The same contracts on Etherscan: [`AIArbiter`](https://sepolia.etherscan.io/addr
 | Human arbiter EOA (`AIArbiter.human`) | [`0x798b01Cef62b889943Ce1D3C5011a755B297e486`](https://sepolia.etherscan.io/address/0x798b01Cef62b889943Ce1D3C5011a755B297e486) | 🟢 live |
 | AI judge key (`AIArbiter.agent`, keystore `rentouts-judge`) | [`0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA`](https://sepolia.etherscan.io/address/0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA) | 🟢 live |
 | World ID 4.0 RP signer (`WorldIdV4Gate.signer`) | [`0xbb80c666Ed8E8B5ec45481f911c7a892f8A842CA`](https://sepolia.etherscan.io/address/0xbb80c666Ed8E8B5ec45481f911c7a892f8A842CA) | 🟢 live (signs off-chain only) |
+| World ID verifier | [`0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`](https://sepolia.etherscan.io/address/0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa) | 🟢 live. Alice verified. First gate `0x2705…B209` superseded |
 | Circle test USDC (Circle's) | [`0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`](https://sepolia.etherscan.io/address/0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238) | 🟢 external, 6 decimals |
 | ENS Universal Resolver (ENS's) | [`0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe`](https://sepolia.etherscan.io/address/0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe) | 🟢 external |
 | ENS `ETHRegistry` (ENS's) | [`0x657eA849311d3D5823348ddEd7C2AaAFb3EDE09E`](https://sepolia.etherscan.io/address/0x657eA849311d3D5823348ddEd7C2AaAFb3EDE09E) | 🟢 external |
