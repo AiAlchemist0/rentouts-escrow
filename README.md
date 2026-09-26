@@ -358,3 +358,9 @@ For judges and reviewers: how the whole project fits together (escrow, AI disput
 | [`docs/ens/LOG.md`](./docs/ens/LOG.md) | Running ENS track log with transaction hashes |
 
 Diagrams are Mermaid and render on GitHub.
+
+## Submission docs
+
+- [`docs/SUBMISSION.md`](./docs/SUBMISSION.md): one-page judge guide (live addresses, sponsor tech, what was built at the event, team)
+- [`docs/ens/FEEDBACK.md`](./docs/ens/FEEDBACK.md): developer feedback for the ENS team on the ENSv2 Sepolia beta
+- [`AI_USAGE.md`](./AI_USAGE.md): where and how AI tools were used
