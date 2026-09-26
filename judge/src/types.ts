@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MATERIALS, RULE_IDS } from './rules/tokyo.ts'
 
 export type Hex = `0x${string}`
 export type Address = `0x${string}`
@@ -79,6 +80,30 @@ const yesNo = z
   })
   .strict()
 
+const ruleIds = z.array(z.enum(RULE_IDS)).min(1).max(7)
+
+/**
+ * One item the landlord claims for, classified under the Tokyo rules pack (rules/tokyo.ts). The
+ * model classifies; code applies the depreciation schedule (TKY-5) and the payout (rubric.ts).
+ */
+export const ClaimedItemSchema = z
+  .object({
+    /** Short name, e.g. "bedroom wallpaper". */
+    item: z.string().min(1).max(80),
+    material: z.enum(MATERIALS),
+    /** ageing / normal_use => landlord (TKY-1); tenant_damage => tenant (TKY-2); not_established => landlord (TKY-7). */
+    cause: z.enum(['ageing', 'normal_use', 'tenant_damage', 'not_established']),
+    confidence: z.number().min(0).max(1),
+    /** Cost of repairing the smallest practical unit (TKY-4) AS IF NEW, relative to the deposit, 1..5. No depreciation. */
+    severity: z.number().int().min(1).max(5),
+    /** The item's age at move-out in years, only if the evidence establishes it; else null. */
+    ageYears: z.number().min(0).max(100).nullable().optional(),
+    rules: ruleIds,
+  })
+  .strict()
+
+export type ClaimedItem = z.infer<typeof ClaimedItemSchema>
+
 export const JudgeAnswersSchema = z
   .object({
     /** Q1: damage beyond normal wear and tear, caused during the tenancy, established by the evidence. */
@@ -91,6 +116,10 @@ export const JudgeAnswersSchema = z
     severity: z.number().int().min(1).max(5),
     /** Short plain-language reasons, citing evidence ids (E1, E2, ...). Explanation only: it never sets the split. */
     rationale: z.string().min(1).max(800),
+    /** Ids of the Tokyo rules (TKY-n) the answers rest on. Optional: answers recorded before the pack have none. */
+    rules: ruleIds.optional(),
+    /** The claimed items, classified under the pack. When present, code charges per item (rubric v2). */
+    items: z.array(ClaimedItemSchema).max(6).optional(),
   })
   .strict()
 

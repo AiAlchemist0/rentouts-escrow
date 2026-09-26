@@ -394,8 +394,9 @@ export function useAddressInput(input: string): ResolvedInput {
 // ------------------------------------------------------------------ escrow
 
 /**
- * The escrow's human gate as it applies to `account`: isVerified(account), and whether HumanGate is open
- * (verifier() == address(0), everyone passes). Both are undefined until read, or if the read fails.
+ * The escrow's human gate as it applies to `account`: isVerified(account), whether HumanGate is open
+ * (verifier() == address(0), everyone passes) and, when it isn't, the verifier (the World ID 4.0 gate).
+ * All are undefined until read, or if the read fails.
  */
 export function useHumanGate(account: Address | undefined): HumanGateView {
   const { humanGate } = useContracts()
@@ -405,7 +406,8 @@ export function useHumanGate(account: Address | undefined): HumanGateView {
     functionName: 'isVerified',
     args: account ? [account] : undefined,
     chainId: sepolia.id,
-    query: { enabled: !!humanGate && !!account },
+    // Registration happens outside this app (the RP registers the wallet), so keep re-checking.
+    query: { enabled: !!humanGate && !!account, refetchInterval: 12_000 },
   })
   const verifier = useReadContract({
     address: humanGate,
@@ -413,12 +415,13 @@ export function useHumanGate(account: Address | undefined): HumanGateView {
     functionName: 'verifier',
     chainId: sepolia.id,
     // Any IHumanGate may sit here; only HumanGate has verifier().
-    query: { enabled: !!humanGate, retry: false },
+    query: { enabled: !!humanGate, retry: false, refetchInterval: 12_000 },
   })
   return {
     gate: humanGate,
     verified: humanGate && account ? verified.data : undefined,
     open: humanGate && verifier.data !== undefined ? verifier.data === zeroAddress : undefined,
+    verifier: humanGate && verifier.data && verifier.data !== zeroAddress ? verifier.data : undefined,
   }
 }
 

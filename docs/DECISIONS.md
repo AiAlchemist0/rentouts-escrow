@@ -13,7 +13,8 @@ Short architecture decision records (ADRs) for RentOuts Escrow at ETHGlobal Toky
 | [07](#adr-07-names-never-expire-revocation-is-the-only-end-labels-are-single-use) | Names never expire; revocation is the only end; labels are single-use | accepted, live |
 | [08](#adr-08-a-separate-issuer-eoa-with-key-scoped-ens-roles) | A separate issuer EOA with key-scoped ENS roles | accepted, live (role cleanup done Sat 03:09 JST) |
 | [09](#adr-09-lease-shares-minted-to-an-allowlisted-landlord-at-createlease) | Lease shares minted to an allowlisted landlord at `createLease` | accepted, live |
-| [10](#adr-10-world-id-behind-a-human-gate-seam-that-only-gates-new-funding) | World ID behind a human-gate seam that only gates new funding | accepted, live (gate open); World verifier next |
+| [10](#adr-10-world-id-behind-a-human-gate-seam-that-only-gates-new-funding) | World ID behind a human-gate seam that only gates new funding | accepted, live; a `WorldIdV4Gate` is the verifier since Sat 12:09 JST, the one alice is registered on since 12:42 JST ([ADR-12](#adr-12-world-id-40-through-an-rp-signed-registration-gate)) |
+| [12](#adr-12-world-id-40-through-an-rp-signed-registration-gate) | World ID 4.0 through an RP-signed registration gate | accepted, live (Sat 12:09 JST; the `fund-lease-wallet` gate since 12:42 JST) |
 | [11](#adr-11-an-ai-judge-that-only-proposes-a-human-has-the-last-word) | An AI judge that only proposes; a human has the last word | accepted, live (`AIArbiter`, Sat 03:05 JST) |
 
 ---
@@ -159,7 +160,7 @@ Short architecture decision records (ADRs) for RentOuts Escrow at ETHGlobal Toky
 **Consequences.**
 - The gate owner decides only **who may fund a new lease**. It holds no tokens and cannot move, freeze or redirect funds. `claimRent`, `closeLease`, `openDispute` and `resolveDispute` never consult it, so a funded lease runs to the end whatever the gate says (tested).
 - A verifier that reverts makes funding fail closed until the owner fixes or clears it. `setVerifier` refuses a non-contract (`VerifierHasNoCode`).
-- Until the World verifier is set there is no proof of personhood. One name per address is the only sybil friction. The issuer can reflect a passed check in `rentouts.verified`.
+- The World verifier is set: `HumanGate.verifier` is `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa` since Sat 12:42 JST (a first gate from 12:09, see ADR-12), and only a registered wallet can fund a new lease. One name per address remains the ENS sybil friction. The issuer can reflect a passed check in `rentouts.verified`.
 - The owner is a single EOA on testnet; in production it would be a Safe.
 
 ## ADR-11: An AI judge that only proposes; a human has the last word
@@ -182,3 +183,18 @@ Short architecture decision records (ADRs) for RentOuts Escrow at ETHGlobal Toky
 - Statements are public on-chain, and the model provider receives them.
 - The human route has no deadline, and an appeal costs only gas. A production version would add an appeal bond and a service-level deadline.
 - Text only: the judge can't check photos, documents or invoices a statement mentions.
+
+## ADR-12: World ID 4.0 through an RP-signed registration gate
+
+**Context.** World App issues World ID **4.0** proofs. The only World ID verifier contract on Ethereum Sepolia is the 3.0 router (`verifyProof`), which cannot check a 4.0 proof, and World ID 4.0's on-chain verifier lives on World Chain, where the escrow isn't. World does verify 4.0 proofs at `POST /api/v4/verify/{rp_id}`. `RentEscrow.humanGate` is immutable, so whatever answers `isVerified(tenant)` has to sit behind the live `HumanGate`.
+
+**Decision.**
+- `WorldIdV4Gate` (Dean, PR #11) is the `HumanGate` verifier. After World's verify API returns `success: true` for a proof whose signal is the tenant wallet, the RentOuts RP signer `0xbb80c666Ed8E8B5ec45481f911c7a892f8A842CA` signs `(chainId, gate, actionHash, wallet, nullifier, deadline)`. Anyone submits `register`, which consumes the nullifier and marks the wallet verified.
+- `WorldHumanVerifier` (the 3.0 router path, PR #9) is kept in the repo as deprecated and is not deployed.
+- Live: gate `0x27052bD69b3d961940bCD093C21ba729b6c1B209` (action `fund-lease`) became the verifier on Sat 12:09 JST ([`0x56b47b25…43e8ee`](https://sepolia.etherscan.io/tx/0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee)). Its one phone proof had been spent off-chain before wallet binding existed, so a second gate `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa` (action `fund-lease-wallet`) was deployed and alice registered on it (block 11783569). The gate owner switched the `HumanGate` to it on Sat 12:42 JST ([`0xcd93549e…b86671`](https://sepolia.etherscan.io/tx/0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671), block 11783640), one `setVerifier` with no escrow redeploy. The first gate is superseded, and alice is the one registered wallet.
+
+**Consequences.**
+- The zk proof is checked by World's API, not on-chain: the RP signer is a trusted role, and the "signal must equal the wallet" rule lives in the off-chain backend. On-chain the attestation is bound to chain, gate, action, wallet, nullifier and deadline (replays across any of them are tested to fail).
+- The signer is immutable, with no rotation, revocation or unregister. A leaked key lets anyone register any wallet until the gate owner swaps in a new gate. A wallet, once registered, stays registered.
+- One World ID registers one wallet per gate. A new action means a new gate, and every tenant has to register again.
+- It never touches funds: like any verifier, it only decides who may fund a **new** lease.
