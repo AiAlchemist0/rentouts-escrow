@@ -18,7 +18,10 @@
     "deployTx": "0xf6009731cf6bd6431914961d33746cc7bfc8cd626e730f31df0f333d0a6a199c",
     "verified": "sourcify",
     "humanGate": "0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd",
-    "setVerifier": "pending — gate owner 0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE"
+    "setVerifier": "0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee",
+    "setVerifierBlock": 11783482,
+    "setVerifierFrom": "0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE",
+    "registeredWallets": 0
   },
   "sepoliaAIArbiter": {
     "agent": "0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA",

@@ -1,30 +1,39 @@
-# World ID — plugging into the deployed HumanGate
+# World ID 4.0 — live gate, registration still empty
 
-The escrow is already live and does not need a redeploy. `RentEscrow.fundLease` asks `HumanGate.isVerified(tenant)`. The gate on Ethereum Sepolia (`0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd`) is **open** (`verifier == address(0)`). The gate owner turns proof-of-personhood on with one call:
+`HumanGate` `0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd` on Ethereum Sepolia points at `WorldIdV4Gate` `0x27052bD69b3d961940bCD093C21ba729b6c1B209`.
+
+| | |
+|---|---|
+| `setVerifier` tx | `0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee` |
+| Block | 11783482 |
+| From | `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE` |
+| Action | `fund-lease` |
+| RP signer | `0xbb80c666Ed8E8B5ec45481f911c7a892f8A842CA` |
+| Registered wallets | 0 |
+
+`fundLease` reverts `NotVerifiedHuman` until `register` lands for that tenant. Rollback is `setVerifier(address(0))` from the gate owner. Do not redeploy `RentEscrow`. `WorldHumanVerifier` is the unused World ID 3.0 path.
+
+## Who registers alice
+
+Alice `0x484811c8c967809bE644A89d677933c29fb9e936` (`alice.rentouts.eth`) is a Foundry keystore. She does not live in World App.
+
+1. A human approves Proof of Human in World App. The IDKit signal is the wallet address they are binding, which can be alice even though the keystore is not the phone.
+2. The backend sends that proof to `POST https://developer.world.org/api/v4/verify/rp_9152be24431cdfcd`. On `success: true`, the RP signer signs `(chainId 11155111, gate, actionHash, wallet, nullifier, deadline)`. It will not sign a wallet that was not the signal.
+3. Anyone with Sepolia ETH submits `register`. Dean broadcasts it from `0x512983d428B10a0b2224442a891Ac9b9A3502c28`. Alice does not. One nullifier registers one wallet. The contract then returns `isVerified(alice) == true`, and alice's keystore can call `fundLease`.
 
 ```bash
-cast send 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd \
-  "setVerifier(address)" <WorldHumanVerifier> \
-  --account rentouts-deployer --rpc-url sepolia
+export SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+export GATE=0x27052bD69b3d961940bCD093C21ba729b6c1B209
+export ALICE=0x484811c8c967809bE644A89d677933c29fb9e936
+
+cast send $GATE \
+  "register(address,uint256,uint256,bytes)" \
+  $ALICE $NULLIFIER $DEADLINE $SIGNATURE \
+  --rpc-url $SEPOLIA_RPC_URL
+
+cast call $GATE "isVerified(address)(bool)" $ALICE --rpc-url $SEPOLIA_RPC_URL
 ```
 
-`WorldHumanVerifier` is that verifier. A tenant submits an IDKit **Orb** proof whose signal is their wallet. The contract checks it against the World ID Router (`verifyProof`, `groupId = 1`) and then `isVerified` returns true for that address. A nullifier can only be used once (one human, one verification for this action). The contract holds no tokens and cannot move escrow funds.
+`$NULLIFIER`, `$DEADLINE`, and `$SIGNATURE` come from the backend after verify. The signature is EIP-191 over `keccak256(abi.encode(chainId, gate, actionHash, wallet, nullifier, deadline))`.
 
-## Deploy (does not touch the escrow)
-
-```bash
-# WORLD_APP_ID must be the real IDKit app id from the World Developer Portal.
-# WORLD_ACTION must be the action id configured there (default name: fund-lease).
-export WORLD_APP_ID=app_staging_<from portal>
-export WORLD_ACTION=fund-lease
-forge script script/DeployWorldVerifier.s.sol --rpc-url sepolia \
-  --account rentouts-deployer --broadcast
-```
-
-Default router is the Ethereum Sepolia World ID Router `0x469449f251692E0779667583026b5A1E99512157` (contract code confirmed on-chain 2026-09-26). Override with `WORLD_ID_ROUTER` only if World publishes a different address.
-
-Until `setVerifier` is called, funding stays open. Setting the verifier back to `address(0)` opens the gate again. Leases that are already funded never consult the gate.
-
-## What IDKit must send
-
-`verify(account, root, nullifierHash, proof)` where `account` is the tenant wallet (the proof signal), and `root` / `nullifierHash` / `proof` come from IDKit for app id + action `fund-lease`. The external nullifier is derived in the constructor the same way World does: `hashToField(abi.encodePacked(hashToField(appId), action))`.
+This iPhone already used its `fund-lease` nullifier (signal `rentouts-fund-lease`, never registered on-chain). World App returns `nullifier_replayed` for a second proof of that action. A different human can still register alice on this gate. This same phone needs a new action, a new gate, and another `setVerifier`.
