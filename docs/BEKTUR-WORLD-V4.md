@@ -43,7 +43,7 @@ This iPhone already spent its one `fund-lease` nullifier, so alice cannot be reg
 
 **`0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`**
 
-Action `fund-lease-wallet`. Deploy tx `0xde17d046d4e00c95ac09af3fa4e29d4245ca0008ed2a36cbfdf81e053c161dfe`. Same RP signer. Dean registers alice on this contract from the phone proof. Your only new transaction, after that `register` lands:
+Action `fund-lease-wallet`. Deploy tx `0xde17d046d4e00c95ac09af3fa4e29d4245ca0008ed2a36cbfdf81e053c161dfe`. Same RP signer. Alice is registered. Tx `0xdbbfc6dd08fdaa4da200b51e6515a7b60423a7c3f94feb06f4a3b28f65148908`, block 11783569. `isVerified(0x484811c8c967809bE644A89d677933c29fb9e936)` is `true` on this gate. Your only new transaction:
 
 ```bash
 cast send 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd \

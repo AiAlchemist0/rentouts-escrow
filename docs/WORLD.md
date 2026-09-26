@@ -45,7 +45,8 @@ This iPhone already used its `fund-lease` nullifier (signal `rentouts-fund-lease
 | Deploy tx | `0xde17d046d4e00c95ac09af3fa4e29d4245ca0008ed2a36cbfdf81e053c161dfe` |
 | Sourcify | exact match |
 | Signal / tenant | `0x484811c8c967809bE644A89d677933c29fb9e936` |
-| `register` | pending the phone proof |
+| `register` tx | `0xdbbfc6dd08fdaa4da200b51e6515a7b60423a7c3f94feb06f4a3b28f65148908` (block 11783569) |
+| `isVerified(alice)` | `true` on this gate |
 | `setVerifier` | pending, from `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE` |
 
 ```bash
