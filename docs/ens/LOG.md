@@ -155,6 +155,12 @@ Sourcify pages: `https://repo.sourcify.dev/11155111/<address>`. Etherscan needs 
 - A fresh clone of `main` is green: root forge 137/137 (incl. invariants INV-1…4, AI-1…3), ens fork tests 42/42 against live Sepolia, judge 92/92, app 94/94 + production build, `app/scripts/live-smoke.mjs` all wiring checks passed with no local env, and ENS live read OK.
 - Still open: Etherscan verification (needs an API key; Sourcify + Blockscout are exact-match), the first live demo lease + `CredentialSync.sync(alice)`, World ID via `HumanGate.setVerifier` (Sat), and the ENS writeup + FEEDBACK.md.
 
+**Sat 12:25: World ID + ENS combined gate built (branch `feat/ens-world-gate`, ready to deploy, NOT broadcast).**
+- `src/EnsCredentialGate.sol`: `isVerified(wallet)` = `RentoutsSubnames.labelOf(wallet)` non-empty AND ENSv2 `UserRegistry.getOwner(keccak256(label)) == wallet`. `src/AllOfHumanGate.sol`: AND of 1..4 immutable gates. Both ownerless, never revert (gas-capped `staticcall`, hand-decoded returns), fail closed.
+- Goal (judge criteria): ENS in the money path. With `HumanGate.setVerifier(AllOf[WorldIdV4Gate, EnsCredentialGate])`, remove ENS or remove World and `fundLease` reverts `NotVerifiedHuman`. No escrow redeploy.
+- Tests: 31 unit/fuzz (`test/EnsWorldGate.t.sol`) + 6 fork tests against live Sepolia (`test/EnsWorldGate.fork.t.sol`: alice funds a real lease only with World + ENS; World-only wallet reverts; live `revoke("alice")` stops funding; rollback to World only). Root suite 188/188.
+- Go-live = `script/DeployEnsWorldGate.s.sol --broadcast` + one owner `setVerifier(allOfHumanGate)`; rollback `setVerifier(WorldIdV4Gate)` or `0`. Dry run against the public RPC is clean.
+
 ---
 
 ## Open items

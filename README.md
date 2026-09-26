@@ -64,6 +64,30 @@ The gate owner can only decide **who may fund a new lease**. It holds no tokens 
 
 **Live:** the Sepolia escrow's gate is `HumanGate` [`0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd`](https://eth-sepolia.blockscout.com/address/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) (owner: the deployer; verifier `0`, so open). Its deploy tx and verification status are in the Live on Ethereum Sepolia table below.
 
+#### World ID + ENS combined gate (ready to deploy, not live yet)
+
+Two small contracts make ENS part of the money path, with no escrow redeploy. Funding a lease then needs a World-verified human **and** an active `rentouts.eth` credential:
+
+- `EnsCredentialGate` ([`src/EnsCredentialGate.sol`](./src/EnsCredentialGate.sol)): `isVerified(wallet)` is true only if the live `RentoutsSubnames` still maps the wallet to a label (`revoke` clears it) **and** the ENSv2 `UserRegistry` says the wallet owns `<label>.rentouts.eth` (`getOwner(uint256(keccak256(label))) == wallet`, which catches a name unregistered or expired outside RentoutsSubnames).
+- `AllOfHumanGate` ([`src/AllOfHumanGate.sol`](./src/AllOfHumanGate.sol)): the AND of 1 to 4 fixed gates. Here the gates are `[WorldIdV4Gate, EnsCredentialGate]`.
+
+Neither has an owner or a setter. Neither can revert in `isVerified`: every sub-call is a gas-capped `staticcall` whose return data is checked by hand, and a revert, out-of-gas or malformed answer counts as `false`. The gate fails closed.
+
+Going live is one deploy plus one owner transaction. Rolling back is one transaction:
+
+```bash
+# 1. Deploy both gates (dry run: leave out --account/--broadcast; records "sepoliaHumanGates" in deployments.json only on --broadcast)
+forge script script/DeployEnsWorldGate.s.sol --rpc-url sepolia \
+  --account rentouts-deployer --sender 0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE --broadcast
+# 2. HumanGate owner switches funding to World ID AND ENS (the script prints this exact command)
+cast send 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd "setVerifier(address)" <allOfHumanGate> --account rentouts-deployer --rpc-url sepolia
+# Rollback: World ID only
+cast send 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd "setVerifier(address)" 0x27052bD69b3d961940bCD093C21ba729b6c1B209 --account rentouts-deployer --rpc-url sepolia
+# (or 0x0000000000000000000000000000000000000000 to open the gate)
+```
+
+`test/EnsWorldGate.fork.t.sol` runs this against the live Sepolia contracts on a fork. It deploys through the script, points the live `HumanGate` at the combined gate as its owner, and checks each case. `alice.rentouts.eth` without World ID gets `NotVerifiedHuman`. With World ID she funds a real lease. A World-verified wallet with no name is refused. Revoking `alice.rentouts.eth` stops her funding. Remove ENS or remove World and funding stops.
+
 ### Invariants (`test/RentEscrow.invariant.t.sol`)
 
 A handler runs random create / fund / warp / claim / close / dispute / resolve / cancel sequences across four actors (funding through a `HumanGate` with a verifier that approves them), a keeper and the arbiter, and books every token transfer out of the escrow from the token's own `Transfer` logs:
@@ -82,6 +106,8 @@ forge test --match-path 'test/RentEscrow*' -vv   # 53 unit/fuzz tests + 4 invari
 forge test --match-path test/HumanGate.t.sol      # 16 human-gate tests
 forge test --match-path test/DeployEscrow.t.sol   # 15 deploy-script tests
 forge test --match-path 'test/AIArbiter*'         # 34 AIArbiter tests + 3 invariants (AI-1..AI-3)
+forge test --match-path test/EnsWorldGate.t.sol   # 31 World + ENS combined-gate tests (mocks, fuzzed return data)
+forge test --match-path test/EnsWorldGate.fork.t.sol  # 6 fork tests against live Sepolia (needs network)
 forge test                                        # everything, incl. the 12 LeaseShare1155 tests (137 total)
 ```
 
