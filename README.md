@@ -55,8 +55,10 @@ Periods can be as short as `MIN_PERIOD = 60` seconds, so a whole lease plays out
 
 The escrow has no owner and cannot change, yet World ID has to be added later. The escrow takes a `humanGate` address once, at deployment (`address(0)` = no gating, ever), and `fundLease` asks it `isVerified(tenant)`. By default the deploy script creates a `HumanGate` owned by the deployer that forwards the question to a `verifier`:
 
-- `verifier == address(0)` (as deployed): the gate is **open**, and every tenant can fund. This is the state today, since World ID is not built yet.
-- `HumanGate.setVerifier(worldAdapter)` (owner only, emits `VerifierUpdated`): from then on only addresses the verifier approves can fund **new** leases. Same escrow address, no redeploy. Setting it back to `address(0)` reopens the gate.
+- `verifier == address(0)` (as deployed): the gate is **open**, and every tenant can fund.
+- `HumanGate.setVerifier(WorldIdV4Gate)` (owner only, emits `VerifierUpdated`): from then on only wallets registered after a World ID **4.0** Proof of Human can fund **new** leases. Same escrow address, no redeploy. Setting it back to `address(0)` reopens the gate.
+
+World App issues protocol 4.0 proofs. World checks them at `POST /api/v4/verify/rp_9152be24431cdfcd` (app `app_2432bfa166623cfbbf813744d0b4b00c`, action `fund-lease`). There is no World ID 4.0 verifier contract on Ethereum Sepolia, so `WorldIdV4Gate` does not call `verifyProof`. The RP signer attests the successful verify, and `register` stores that wallet. `WorldHumanVerifier` is the older 3.0 router check and does not accept this phone proof.
 
 The gate owner can only decide **who may fund a new lease**. It holds no tokens and cannot move, freeze or redirect funds. `claimRent`, `closeLease`, `openDispute` and `resolveDispute` never consult it, so a funded lease runs to the end whatever the gate says (tested). If the verifier reverts, funding fails closed until the owner fixes or clears it.
 
