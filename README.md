@@ -250,7 +250,38 @@ Tenants get a soulbound `<name>.rentouts.eth` subname on the ENSv2 beta. Its `re
 
 ## Architecture
 
-Full write-up + diagrams: **[ARCHITECTURE.md](./ARCHITECTURE.md)**, covering the whole system: escrow, AI dispute judge, human gate (World ID seam), ENS identity and lease shares. The diagram below is the lease-share part. `LeaseShare1155` tokenizes a lease/deposit as a permissioned ERC-1155 (`tokenId == leaseId`); every recipient is checked against a compliance allowlist in the OZ v5 `_update` hook, so shares can only move between approved wallets.
+Full write-up: **[ARCHITECTURE.md](./ARCHITECTURE.md)**. World ID only answers one question: may this tenant fund a new lease? ENS is the name and rental credential, `LeaseShare1155` is the compliance-gated lease position, and `AIArbiter` only proposes a dispute split. None of those call World.
+
+```mermaid
+flowchart TB
+  classDef person fill:#12233f,stroke:#5b8def,stroke-width:1.5px,color:#e6efff
+  classDef world fill:#143024,stroke:#1fa882,stroke-width:2px,color:#e8fff7
+  classDef money fill:#0f2e27,stroke:#1fa882,stroke-width:2px,color:#e8fff7
+  classDef side fill:#1a2436,stroke:#8aa0c8,stroke-width:1.5px,color:#e6efff
+
+  Phone["iPhone World App<br/>Proof of Human"]:::person
+  Page["IDKit page<br/>action fund-lease"]:::world
+  API["World verify API<br/>protocol 4.0"]:::world
+  Gate["HumanGate<br/>isVerified(tenant)"]:::world
+  Escrow["RentEscrow<br/>USDC deposit and rent"]:::money
+  Name["ENS subname<br/>alice.rentouts.eth"]:::side
+  Share["LeaseShare1155<br/>allowlisted shares"]:::side
+  Judge["AIArbiter<br/>proposes a split only"]:::side
+  Cred["CredentialSync<br/>writes rentouts.* records"]:::side
+
+  Phone -->|"approve proof"| Page
+  Page -->|"RP-signed request"| API
+  API -.->|"wallet recorded<br/>setVerifier later"| Gate
+  Gate -->|"only on fundLease"| Escrow
+  Name -->|"landlord leases to this name"| Escrow
+  Escrow -->|"createLease mints 100 shares"| Share
+  Escrow -->|"openDispute"| Judge
+  Judge -->|"resolveDispute"| Escrow
+  Escrow -->|"tenantStats"| Cred
+  Cred -->|"credential text records"| Name
+```
+
+The lease-share diagram below is only the Curvegrid piece. `LeaseShare1155` tokenizes a lease as a permissioned ERC-1155 (`tokenId == leaseId`); every recipient is checked against a compliance allowlist.
 
 ```mermaid
 flowchart TB
