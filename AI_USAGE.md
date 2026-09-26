@@ -21,7 +21,7 @@ AI co-authorship is recorded in the git history. Every non-merge commit authored
 | AI dispute judge service | `judge/` | Bektur with Claude Code |
 | Demo app | `app/` | Bektur with Claude Code |
 | Lease shares (RWA) | `src/LeaseShare1155.sol`, `test/LeaseShare1155.t.sol`, `script/DeployLeaseShare.s.sol` | Dean. His PRs were squash-merged, so the history has no per-commit AI trailer. _Dean to confirm the tools used._ |
-| World ID | `src/WorldIdV4Gate.sol`, `src/WorldHumanVerifier.sol`, their tests and deploy scripts, `docs/WORLD.md`, `docs/BEKTUR-WORLD-V4.md` | Dean (squash-merged PRs #9–#11). _Dean to confirm the tools used._ |
+| World ID | `src/WorldIdV4Gate.sol`, `src/WorldHumanVerifier.sol`, their tests and deploy scripts, `docs/WORLD.md`, `docs/BEKTUR-WORLD-V4.md` | Dean (squash-merged PRs #9–#12). _Dean to confirm the tools used._ |
 | Docs | `README.md`, `ARCHITECTURE.md`, `docs/` | Bektur's sections drafted and fact-checked with Claude Code. Dean's sections (lease shares, World ID) are covered by the two rows above. |
 
 **Planning artifacts in this repo:** [`docs/ens/HANDOFF.md`](./docs/ens/HANDOFF.md) (the ENS design brief), [`docs/ens/research/ensv2-docs-research.md`](./docs/ens/research/ensv2-docs-research.md), [`docs/PLAN.md`](./docs/PLAN.md), [`docs/DECISIONS.md`](./docs/DECISIONS.md) and the running build log [`docs/ens/LOG.md`](./docs/ens/LOG.md).
@@ -31,9 +31,10 @@ AI co-authorship is recorded in the git history. Every non-merge commit authored
 - **Design decisions** were made by the team. Examples: one chain, Circle USDC, a soulbound and revocable ENS name, a split-only arbiter, an AI that only proposes, no redeploy after the reviews. They are recorded as team decisions in [`docs/ens/LOG.md`](./docs/ens/LOG.md) and [`docs/DECISIONS.md`](./docs/DECISIONS.md).
 - **Every deployment and on-chain transaction** was signed by a team member with their own key:
   - The escrow, arbiter and ENS stack on Ethereum Sepolia used Foundry keystores. Bektur ran each broadcast and typed the keystore password himself.
-  - Dean deployed `LeaseShare1155` on Base Sepolia and `WorldIdV4Gate` from his own testnet key.
+  - Dean deployed `LeaseShare1155` on Base Sepolia and both `WorldIdV4Gate`s from his own testnet key, and submitted alice's World ID `register` transaction.
+  - Bektur sent both `HumanGate.setVerifier` transactions from the escrow deployer keystore.
   - No key or password is in this repo.
-- **Every change** after the three setup commits reached `main` through a pull request (#1–#11), merged by a team member.
+- **Every change** after the three setup commits reached `main` through a pull request (#1–#12), merged by a team member.
 
 ## AI inside the product
 

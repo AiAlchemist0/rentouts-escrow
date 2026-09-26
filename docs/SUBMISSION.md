@@ -12,14 +12,15 @@ Everything is on **Ethereum Sepolia** (testnet, Circle's test USDC). Start with 
 
 ## Live contracts
 
-Every address below had contract code when we checked on Sat 2026-09-26 at 12:30 JST (`cast code`). Every contract we wrote is source-verified on Sourcify with an `exact_match`, including the Base Sepolia one. The Ethereum Sepolia ones are also verified on Blockscout.
+Every address below had contract code when we checked on Sat 2026-09-26 at 12:45 JST (`cast code`). Every contract we wrote is source-verified on Sourcify with an `exact_match`, including the Base Sepolia one. The Ethereum Sepolia ones are also verified on Blockscout.
 
 | Contract | Address (Ethereum Sepolia, 11155111) | What it does |
 | --- | --- | --- |
 | `RentEscrow` | [`0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18`](https://eth-sepolia.blockscout.com/address/0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18) | USDC escrow. Its token, arbiter, lease shares and human gate are fixed at deployment (immutable). |
 | `AIArbiter` | [`0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5`](https://eth-sepolia.blockscout.com/address/0xC3D50752a1f42cc54d3c90a1261779eEF5bbdCb5) | The escrow's arbiter. AI proposes, 120 s appeal window, human override. |
 | `HumanGate` | [`0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd`](https://eth-sepolia.blockscout.com/address/0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd) | Asked by `fundLease`. It forwards the question to its `verifier`. |
-| `WorldIdV4Gate` | [`0x27052bD69b3d961940bCD093C21ba729b6c1B209`](https://eth-sepolia.blockscout.com/address/0x27052bD69b3d961940bCD093C21ba729b6c1B209) | The verifier: wallets registered after a World ID 4.0 Proof of Human for the `fund-lease` action. |
+| `WorldIdV4Gate` (live) | [`0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`](https://eth-sepolia.blockscout.com/address/0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa) | The verifier since Sat 12:42 JST: wallets registered after a World ID 4.0 Proof of Human for the `fund-lease-wallet` action. |
+| `WorldIdV4Gate` (superseded) | [`0x27052bD69b3d961940bCD093C21ba729b6c1B209`](https://eth-sepolia.blockscout.com/address/0x27052bD69b3d961940bCD093C21ba729b6c1B209) | Same contract for the `fund-lease` action. It was the verifier from 12:09 to 12:42 JST. No wallet registered on it. |
 | `LeaseShare1155` | [`0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09`](https://eth-sepolia.blockscout.com/address/0x9A9Fd2c881Ad7d6164F4F6b6cdB6F3207F3e1E09) | Lease shares. Minter = `RentEscrow`. |
 | `RentoutsSubnames` | [`0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60`](https://eth-sepolia.blockscout.com/address/0xd7bDB1EeDa6AEDf59B3868D048e75cC3dBFDFf60) | Issues soulbound `*.rentouts.eth` names. |
 | `CredentialSync` | [`0xd0783EC7B0668652718f3977Ca92235fe6bF9c56`](https://eth-sepolia.blockscout.com/address/0xd0783EC7B0668652718f3977Ca92235fe6bF9c56) | Permissionless `sync(tenant)`: escrow stats → `rentouts.*` records. |
@@ -28,20 +29,24 @@ Every address below had contract code when we checked on Sat 2026-09-26 at 12:30
 
 The two ENS proxies were deployed through ENS's `VerifiableFactory`, so their code is ENS's.
 
+The two `WorldIdV4Gate`s run the same code and differ only in the action fixed at deployment. World ID gives each human one nullifier per action. Our test phone had already spent its `fund-lease` nullifier on a proof whose signal wasn't a wallet, so nothing could be registered on the first gate. Dean deployed a second gate for a new action, `fund-lease-wallet`.
+
 **Standalone deployment on Base Sepolia (84532):** `LeaseShare1155` [`0x5490e5dFcDcA741aC99127f66B4abf6204cd64C5`](https://sepolia.basescan.org/address/0x5490e5dFcDcA741aC99127f66B4abf6204cd64C5), with the on-chain compliance demo transactions listed in the README.
 
 **External contracts we use:** Circle test USDC `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` and the ENS Universal Resolver `0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe`.
 
 **Machine-readable addresses:** [`deployments.json`](../deployments.json) and [`ens/deployments/sepolia.json`](../ens/deployments/sepolia.json).
 
-### Live state (Sat 2026-09-26, 12:30 JST, block 11783579)
+### Live state (Sat 2026-09-26, 12:45 JST, block 11783652)
 
-**World ID is on.**
-- `HumanGate.verifier()` has been `WorldIdV4Gate` since tx [`0x56b47b25…43e8ee`](https://sepolia.etherscan.io/tx/0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee) (block 11783482, 12:09 JST). The gate owner sent it.
-- The `sepoliaWorldIdV4` entry in `deployments.json` still says `setVerifier: pending`. The chain is the source of truth.
+**World ID is on, through the second gate.**
+- `HumanGate.verifier()` has been `WorldIdV4Gate` `0x5Cb8…aABa` (`fund-lease-wallet`) since tx [`0xcd93549e…eb86671`](https://sepolia.etherscan.io/tx/0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671) (block 11783640, 12:42 JST). The gate owner sent it, and `VerifierUpdated` records the switch from the first gate.
+- The first gate `0x2705…B209` (`fund-lease`) was the verifier from tx [`0x56b47b25…43e8ee`](https://sepolia.etherscan.io/tx/0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee) (block 11783482, 12:09 JST) until the switch. It has no `HumanRegistered` events and is no longer consulted.
+- The `sepoliaWorldIdV4Wallet` entry in `deployments.json` still says `setVerifier: pending`. The chain is the source of truth.
 
-**No wallet has registered with `WorldIdV4Gate` yet** (no `HumanRegistered` events).
-- Until a tenant registers through the World ID 4.0 flow, `fundLease` reverts `NotVerifiedHuman(tenant)` for every wallet.
+**Alice is the only registered wallet.**
+- `alice.rentouts.eth` (`0x4848…e936`) registered on the second gate in tx [`0xdbbfc6dd…148908`](https://sepolia.etherscan.io/tx/0xdbbfc6dd08fdaa4da200b51e6515a7b60423a7c3f94feb06f4a3b28f65148908) (block 11783569, 12:28 JST). It is the gate's only `HumanRegistered` event, so `HumanGate.isVerified` is `true` for her and `false` for everyone else.
+- Any other tenant's `fundLease` reverts `NotVerifiedHuman(tenant)` until that tenant registers through the World ID 4.0 flow.
 - The gate owner can reopen funding with `setVerifier(address(0))`. Leases that are already funded never consult the gate.
 
 **The escrow has no leases yet** (`nextLeaseId() == 1`). `alice.rentouts.eth` resolves. Its escrow-derived records appear after her first lease and a `CredentialSync.sync`.
@@ -50,9 +55,11 @@ Check any of this yourself:
 
 ```bash
 RPC=https://ethereum-sepolia-rpc.publicnode.com
-cast call 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd "verifier()(address)" --rpc-url $RPC   # WorldIdV4Gate
+cast call 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd "verifier()(address)" --rpc-url $RPC   # 0x5Cb8…aABa (second WorldIdV4Gate)
+cast call 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd "isVerified(address)(bool)" 0x484811c8c967809bE644A89d677933c29fb9e936 --rpc-url $RPC  # true (alice)
 cast resolve-name alice.rentouts.eth --rpc-url $RPC                                       # 0x4848…e936
 cast call 0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18 "humanGate()(address)" --rpc-url $RPC  # HumanGate
+cast call 0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18 "nextLeaseId()(uint256)" --rpc-url $RPC  # 1 (no leases yet)
 ```
 
 ## How each sponsor's technology is used
@@ -79,9 +86,9 @@ Details and the trust model are in [ens/README.md](../ens/README.md). The build 
 
 World ID gates one thing: who may fund a new lease.
 
-- [`src/HumanGate.sol`](../src/HumanGate.sol) is the seam in [`RentEscrow.fundLease`](../src/RentEscrow.sol). The owner can swap its verifier without redeploying the escrow. It never touches funds or funded leases.
-- [`src/WorldIdV4Gate.sol`](../src/WorldIdV4Gate.sol) is the live verifier.
-  - World App produces a 4.0 Proof of Human for the action `fund-lease`, and World's `/api/v4/verify` accepts it.
+- [`src/HumanGate.sol`](../src/HumanGate.sol) is the seam in [`RentEscrow.fundLease`](../src/RentEscrow.sol). The owner can swap its verifier without redeploying the escrow, and did so twice on the live escrow. It never touches funds or funded leases.
+- [`src/WorldIdV4Gate.sol`](../src/WorldIdV4Gate.sol) is the live verifier. The live deployment is for the action `fund-lease-wallet`.
+  - World App produces a 4.0 Proof of Human for that action, with the tenant's wallet as the signal, and World's `/api/v4/verify` accepts it.
   - The RentOuts RP signer then attests `(chainId, gate, actionHash, wallet, nullifier, deadline)`.
   - `register` checks that signature and consumes the nullifier, one human per action. After that, `isVerified(wallet)` is true.
   - The IDKit page and the RP signing step run off-chain. The signing key is not in this repo.
@@ -127,16 +134,19 @@ World ID gates one thing: who may fund a new lease.
 | Sat 03:32–03:35 | PRs #3–#8 merged | merge commits |
 | Sat 11:42 | `WorldHumanVerifier` (World ID 3.0) | `73e06c6` |
 | Sat 11:55 | `WorldIdV4Gate` deployed (PR #11 merged 11:56) | block 11783413, `6e36a33` |
-| Sat 12:09 | `HumanGate.setVerifier(WorldIdV4Gate)` | block 11783482 |
+| Sat 12:09 | `HumanGate.setVerifier(WorldIdV4Gate)`, first gate (`fund-lease`) | block 11783482 |
+| Sat 12:26 | Second `WorldIdV4Gate` (`fund-lease-wallet`) deployed | block 11783562 |
+| Sat 12:28 | `alice.rentouts.eth` registered on the second gate after a World ID 4.0 proof | block 11783569 |
+| Sat 12:42 | `HumanGate.setVerifier` switched to the second gate | block 11783640 |
 
-These are git author times. Branches were rebased before merging, so `git log` order isn't strictly chronological. Squash-merged PRs show their merge time.
+Commit rows use git author times and on-chain rows use block times. Branches were rebased before merging, so `git log` order isn't strictly chronological. Squash-merged PRs show their merge time.
 
 ## Team
 
 | | GitHub | Built |
 | --- | --- | --- |
-| Dean | [@AiAlchemist0](https://github.com/AiAlchemist0) | `LeaseShare1155` and its Base Sepolia deployment; the World ID integration (World Developer Portal app, IDKit and RP-signing flow, `WorldHumanVerifier`, `WorldIdV4Gate`) |
-| Bektur | [@Apolotary](https://github.com/Apolotary) | `RentEscrow` and `HumanGate`, `AIArbiter` and the judge service, the ENS package, the demo app, the Ethereum Sepolia deployments |
+| Dean | [@AiAlchemist0](https://github.com/AiAlchemist0) | `LeaseShare1155` and its Base Sepolia deployment; the World ID integration (World Developer Portal app, IDKit and RP-signing flow, `WorldHumanVerifier`, both `WorldIdV4Gate` deployments, alice's registration) |
+| Bektur | [@Apolotary](https://github.com/Apolotary) | `RentEscrow` and `HumanGate`, `AIArbiter` and the judge service, the ENS package, the demo app, the Ethereum Sepolia deployments and both `setVerifier` switches |
 
 ## More
 
