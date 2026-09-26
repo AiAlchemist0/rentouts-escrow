@@ -36,4 +36,20 @@ cast call $GATE "isVerified(address)(bool)" $ALICE --rpc-url $SEPOLIA_RPC_URL
 
 `$NULLIFIER`, `$DEADLINE`, and `$SIGNATURE` come from the backend after verify. The signature is EIP-191 over `keccak256(abi.encode(chainId, gate, actionHash, wallet, nullifier, deadline))`.
 
-This iPhone already used its `fund-lease` nullifier (signal `rentouts-fund-lease`, never registered on-chain). World App returns `nullifier_replayed` for a second proof of that action. A different human can still register alice on this gate. This same phone needs a new action, a new gate, and another `setVerifier`.
+This iPhone already used its `fund-lease` nullifier (signal `rentouts-fund-lease`, never registered on-chain). The replacement action is `fund-lease-wallet` on a second gate. `HumanGate` still points at the first gate until Bektur calls `setVerifier`.
+
+| | |
+|---|---|
+| Gate | `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa` |
+| Action | `fund-lease-wallet` (`action_v4_c64cfd41a8c538418a6a3bcc68194f1e`, production) |
+| Deploy tx | `0xde17d046d4e00c95ac09af3fa4e29d4245ca0008ed2a36cbfdf81e053c161dfe` |
+| Sourcify | exact match |
+| Signal / tenant | `0x484811c8c967809bE644A89d677933c29fb9e936` |
+| `register` | pending the phone proof |
+| `setVerifier` | pending, from `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE` |
+
+```bash
+cast send 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd \
+  "setVerifier(address)" 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa \
+  --account rentouts-deployer --rpc-url https://ethereum-sepolia-rpc.publicnode.com
+```

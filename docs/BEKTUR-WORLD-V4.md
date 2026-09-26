@@ -39,7 +39,19 @@ cast call $GATE "isVerified(address)(bool)" $ALICE --rpc-url $SEPOLIA_RPC_URL
 # must print true before alice calls fundLease
 ```
 
-This iPhone already spent its one `fund-lease` nullifier on 2026-09-26 (signal was the text `rentouts-fund-lease`, and that proof was never submitted on-chain). World App now returns `nullifier_replayed` for the same person and the same action. A second human who has not proved `fund-lease` can register alice with the command above. Registering this same phone requires a new action string, a new `WorldIdV4Gate`, and one more `setVerifier` from you.
+This iPhone already spent its one `fund-lease` nullifier, so alice cannot be registered on `0x27052bD6…B209`. The replacement is deployed and Sourcify-exact:
+
+**`0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`**
+
+Action `fund-lease-wallet`. Deploy tx `0xde17d046d4e00c95ac09af3fa4e29d4245ca0008ed2a36cbfdf81e053c161dfe`. Same RP signer. Dean registers alice on this contract from the phone proof. Your only new transaction, after that `register` lands:
+
+```bash
+cast send 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd \
+  "setVerifier(address)" 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa \
+  --account rentouts-deployer --rpc-url https://ethereum-sepolia-rpc.publicnode.com
+```
+
+Until you send that, `HumanGate` still points at the first gate and every `fundLease` reverts `NotVerifiedHuman`.
 
 ## Already on-chain
 
