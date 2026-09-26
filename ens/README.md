@@ -109,6 +109,16 @@ The values are a pure function of public escrow state, though. Anyone can call `
 
 This is testnet only: Ethereum Sepolia and Circle's test USDC. The live escrow's dispute arbiter is the `AIArbiter` contract: an AI agent proposes a split, the parties can appeal within a 120 s window, and a human key has the last word. Both keys are single EOAs for the hackathon; production would use a Safe for the human.
 
+## judge.rentouts.eth — the AI judge's name
+
+The AI dispute judge (`judge/`) is the key `AIArbiter` lets propose rulings (`agent()`, today the EOA `0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA`). ENS names it: `judge.rentouts.eth` is a RentOuts subname like a tenant's, soulbound and revocable, and it resolves through the Universal Resolver to that key. Its profile says what it does: `description` = "RentOuts AI dispute judge: proposes rulings on AIArbiter 0xC3D5…bdCb5; humans can appeal and override", `url` = the repo.
+
+- **Issue it** (`script/JudgeName.s.sol`, same env and state file as `DeployEns`): `registerJudge()` is sent by the issuer and mints the name to `AIArbiter.agent()`, read on chain, never hard-coded. `judgeProfile()` is sent by the **judge key**, because `RentoutsSubnames.setProfileText` is holder-only (the issuer can't write a holder's profile). So it takes two signers: `rentouts-deployer`, then `rentouts-judge`. The state file gets `judgeName` / `judgeHolder` only once the chain shows the name (a re-run records it; no transaction). `judgeStatus()` is a read-only report. The guided signer is `../sign-judge-name.sh` (`FORK=1` rehearses it on an anvil fork).
+- **The judge checks it before every proposal** (`judge/src/ens.ts`): `judge.rentouts.eth` must resolve to the signing key, and that key must be `AIArbiter.agent()`. If it doesn't, the judge refuses to send. `JUDGE_ENS_NAME` changes the name, and `off` disables the check for local mock runs.
+- **The app shows it** (`app/src/panels/AiJudgePanel.tsx`): "Proposed by judge.rentouts.eth ✓" when the name resolves to the proposing agent, otherwise the raw address (also before the name exists).
+- **Optional on-chain gate** (`../src/EnsAgentRelay.sol`): the human arbiter can make `EnsAgentRelay` AIArbiter's agent (`setAgent`, no redeploy). The relay forwards `propose` only from the current holder of `judge.rentouts.eth`: `RentoutsSubnames.holderOf(labelId)` and the ENS registry owner must both be the caller. Revoking the name stops the AI at once, and the judge key can't go around it. The judge then runs with `JUDGE_RELAY=<relay>`. Rollback is `setAgent(<judge EOA>)`. Labels are single-use, so a revoked `judge` label can't be reissued: a new judge key needs a new label and a new relay.
+- **Tests:** `test/JudgeName.fork.t.sol` runs the phases against the live Sepolia deployment on a fork. It checks that the Universal Resolver returns `AIArbiter.agent()`, that the texts are readable, that transfers revert (soulbound), that only the judge key writes its profile, that the resolution check rejects any other address, and when the state gets recorded. The relay has its own unit tests and a live fork test in the root project (`test/EnsAgentRelay*.t.sol`).
+
 ## Notes
 
 - **Issuer account:** `ENS_ISSUER` must be a second account, not the deployer. The deployer holds root resolver roles, so it can write any key and would hide the key-scoped limit.

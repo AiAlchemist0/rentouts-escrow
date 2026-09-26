@@ -155,6 +155,13 @@ Sourcify pages: `https://repo.sourcify.dev/11155111/<address>`. Etherscan needs 
 - A fresh clone of `main` is green: root forge 137/137 (incl. invariants INV-1…4, AI-1…3), ens fork tests 42/42 against live Sepolia, judge 92/92, app 94/94 + production build, `app/scripts/live-smoke.mjs` all wiring checks passed with no local env, and ENS live read OK.
 - Still open: Etherscan verification (needs an API key; Sourcify + Blockscout are exact-match), the first live demo lease + `CredentialSync.sync(alice)`, World ID via `HumanGate.setVerifier` (Sat), and the ENS writeup + FEEDBACK.md.
 
+**Sat 12:44: `judge.rentouts.eth`, the AI judge gets an ENS name (branch `feat/ens-judge-name`, not broadcast yet).**
+- Live precondition checks: label `judge` is free (`getExpiry == 0`, not retired), `AIArbiter.agent()` `0x4a44…d0dA` is a plain EOA with no name, and the deployer is the `RentoutsSubnames` admin and an issuer.
+- `ens/script/JudgeName.s.sol`: `registerJudge()` (issuer mints the name to `AIArbiter.agent()`) and `judgeProfile()` (the judge key sets `description` + `url`, because `setProfileText` is holder-only). The state file records `judgeHolder` only once the chain shows it. Dry run against the public RPC: OK, 455,600 gas.
+- `src/EnsAgentRelay.sol` (root): with the human's `setAgent(relay)`, ENS gates the AI on-chain. Only the current holder of `judge.rentouts.eth` can propose, and revoking the name stops it. Rollback is `setAgent(<judge EOA>)`.
+- The judge refuses `--propose` unless the name resolves to its key and to `AIArbiter.agent()` (or the relay's judge). The app shows "Proposed by judge.rentouts.eth ✓".
+- `../sign-judge-name.sh` has steps 1–4 plus rollback. It was rehearsed end to end on an anvil fork (`FORK=1`): name, profile, relay, `setAgent`, then a real lease → dispute → proposal through the relay, with a non-holder and a direct call refused, then rollback.
+
 ---
 
 ## Open items
