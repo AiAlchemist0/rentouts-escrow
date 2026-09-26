@@ -173,6 +173,8 @@ Sourcify pages: `https://repo.sourcify.dev/11155111/<address>`. Etherscan needs 
 - Seen in the same smoke run: `AIArbiter.agent()` is now `0xe56E49cAA4780B71F667bF08a9ADb2C659d9C3eE`. The human arbiter `0x798b…e486` called `setAgent` at 12:51 JST ([`0x0fc2c12c…bb44ad`](https://sepolia.etherscan.io/tx/0x0fc2c12c8686c3b24ee9435a560cc9e795ae675eb057095066969b2ce3bb44ad), block 11783678). The docs and `deployments.json` still say `0x4a44…d0dA` (`rentouts-judge`); not changed here.
 - Still open: top alice up to at least 3.0 USDC before pre-staging the demo leases, Etherscan verification, and the first live lease + `CredentialSync.sync(alice)`.
 
+**Sat 12:47: Tokyo restoration rules pack for the AI judge (`feat/judge-tokyo-rules`).** `judge/src/rules/tokyo.ts` = `tokyo-restoration v1.0.0`, rules TKY-1…7 paraphrasing TMG + MLIT guidance, hashed into every ruling. Answers cite rule ids and the `Proposed` summary ends with them (e.g. `[tokyo-restoration v1.0.0: TKY-2, TKY-4, TKY-5]`, inside the 1000-byte cap); the app shows it as-is. After merging `main` `1f592ac`: judge 109/109, app 94/94 + build, live-smoke + ens-smoke OK. Re-checked at 13:05 after merging `main` `fb804b5` (PR #14): root forge 163/163, judge 109/109, app 95/95 + build, live-smoke + ens-smoke OK.
+
 ---
 
 ## Open items

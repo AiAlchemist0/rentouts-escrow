@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "chainId": 11155111,
+  "escrow": "0x00000000000000000000000000000000000E5c00",
+  "arbiter": "0x00000000000000000000000000000000000A1A00",
+  "lease": {
+    "leaseId": "7",
+    "landlord": "0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE",
+    "tenant": "0x484811c8c967809bE644A89d677933c29fb9e936",
+    "token": {
+      "address": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+      "symbol": "USDC",
+      "decimals": 6
+    },
+    "deposit": "300000",
+    "rentPerPeriod": "100000",
+    "periodSeconds": 31536000,
+    "periods": 7,
+    "periodsClaimed": 7,
+    "startTime": 1569456000,
+    "disputeOpenedAt": 1790380875,
+    "disputeOpenedBy": "landlord",
+    "periodsEarnedAtDispute": 7,
+    "remainingEscrow": "300000",
+    "earnedRentUnreleased": "0",
+    "unearnedRent": "0"
+  },
+  "evidence": [
+    {
+      "id": "E1",
+      "party": "landlord",
+      "author": "0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE",
+      "statement": "The living-room wallpaper is yellowed and discoloured after seven years. I am keeping the deposit to replace it.",
+      "txHash": "0x0000000000000000000000000000000000000000000000000000000000000001",
+      "blockNumber": "9300100",
+      "logIndex": 0
+    },
+    {
+      "id": "E2",
+      "party": "tenant",
+      "author": "0x484811c8c967809bE644A89d677933c29fb9e936",
+      "statement": "The wallpaper was up for my whole 7-year tenancy. The yellowing is ordinary ageing from sunlight, not something I did.",
+      "txHash": "0x0000000000000000000000000000000000000000000000000000000000000002",
+      "blockNumber": "9300101",
+      "logIndex": 0
+    }
+  ],
+  "tenantCredential": {
+    "name": "alice.rentouts.eth",
+    "status": "active",
+    "resolvesToTenant": true,
+    "records": {
+      "rentouts.status": "active",
+      "rentouts.credential": "tenant"
+    }
+  }
+}
