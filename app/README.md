@@ -6,7 +6,7 @@ and the finished lease is written back to the tenant's ENS credential. A dispute
 contract with a human arbiter: the AI only proposes a split, and the human can always override it. It's a demo
 for judges, not a product.
 
-**Hosted:** [https://rentouts-escrow-demo.dofusd.workers.dev](https://rentouts-escrow-demo.dofusd.workers.dev), a static build of this directory on Cloudflare Workers (no secrets; addresses from the repo's deployment records). That build predates the judge-name label below, so until it is rebuilt from `main` its judge panel shows the judge key's address instead of "Proposed by judge.rentouts.eth ✓".
+**Hosted:** [https://rentouts-escrow-demo.dofusd.workers.dev](https://rentouts-escrow-demo.dofusd.workers.dev), a static build of this directory on Cloudflare Workers (no secrets; addresses from the repo's deployment records). It was rebuilt from `main` at `c2f2986` (PR #19) on Sat 13:45 JST, so its judge panel shows "Proposed by judge.rentouts.eth ✓".
 
 Stack: Vite, React, TypeScript, wagmi v2, viem 2.56 (ENS reads go through the ENSv2 Universal Resolver), and
 TanStack Query. Plain CSS. MetaMask (injected connector) only.
