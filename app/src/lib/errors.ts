@@ -85,7 +85,7 @@ export function describeError(name: string, args: readonly unknown[] = []): stri
     case 'InvalidBps':
       return 'The tenant’s share must be between 0% and 100%.'
     case 'NotVerifiedHuman':
-      return `${args[0] ? shortAddress(String(args[0])) : 'This wallet'} hasn’t passed the escrow’s human verification (World ID — coming soon), so it can’t fund a lease.`
+      return `${args[0] ? shortAddress(String(args[0])) : 'This wallet'} hasn’t passed the escrow’s human verification (World ID 4.0: not registered in the gate), so it can’t fund a lease.`
     // AIArbiter
     case 'NotHuman':
       return 'Only the human arbiter can do this.'

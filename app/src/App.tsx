@@ -3,7 +3,7 @@ import { isAddressEqual, type Address } from 'viem'
 import { Header, NetworkGuard } from './components/Header'
 import { AddressLink, ExtLink } from './components/ui'
 import { ENS } from './config'
-import { useAiArbiter, useContracts } from './hooks'
+import { useAiArbiter, useContracts, useHumanGate } from './hooks'
 import { txUrl } from './lib/format'
 import { useTxLog } from './txLog'
 import { CreateLeasePanel } from './panels/CreateLeasePanel'
@@ -70,6 +70,13 @@ function RecentTxs() {
 function Footer() {
   const { escrow, token, leaseShare, credentialSync, arbiter, humanGate, tokenSymbol } = useContracts()
   const { info: ai } = useAiArbiter()
+  const gate = useHumanGate(undefined)
+  const gateNote =
+    gate.open === undefined
+      ? '(who may fund a lease)'
+      : gate.open
+        ? '(who may fund a lease; open, no verifier set)'
+        : '(who may fund a lease; World ID 4.0 verifier plugged in)'
   const arbiterIsAi = !!ai && !!arbiter && isAddressEqual(arbiter, ai.address)
   return (
     <footer className="footer">
@@ -86,7 +93,10 @@ function Footer() {
           {ai && !arbiterIsAi ? <ContractRow name="AIArbiter" address={ai.address} note="(AI judge contract with a human arbiter)" /> : null}
           {ai ? <ContractRow name="Human arbiter" address={ai.human} note="(can always override the AI)" /> : null}
           {ai ? <ContractRow name="AI judge key" address={ai.agent} note={ai.agent ? '(can only propose)' : '(AI proposals off)'} /> : null}
-          {humanGate ? <ContractRow name="HumanGate" address={humanGate} note="(who may fund a lease; World ID coming soon)" /> : null}
+          {humanGate ? <ContractRow name="HumanGate" address={humanGate} note={gateNote} /> : null}
+          {gate.verifier ? (
+            <ContractRow name="World ID gate" address={gate.verifier} note="(HumanGate.verifier(): only wallets registered with a World ID 4.0 proof can fund)" />
+          ) : null}
           <ContractRow name="LeaseShare1155" address={leaseShare} />
           <ContractRow name="CredentialSync" address={credentialSync} />
           <ContractRow name="RentoutsSubnames" address={ENS.subnames} />

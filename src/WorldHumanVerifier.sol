@@ -13,6 +13,8 @@ import {IWorldID} from "./interfaces/IWorldID.sol";
 ///         holds no tokens and cannot move escrow funds.
 /// @dev    External nullifier is `hashToField(abi.encodePacked(hashToField(appId), action))`,
 ///         the same derivation World ID uses, so IDKit proofs for this app id + action verify.
+/// @custom:deprecated World ID 3.0 only: it cannot verify World App 4.0 proofs. Not deployed and not
+///         used. The live HumanGate verifier is a {WorldIdV4Gate} (see docs/WORLD.md).
 contract WorldHumanVerifier is IHumanGate {
     /// @notice Orb credential. The only group the World ID Router verifies on-chain.
     uint256 public constant GROUP_ID = 1;

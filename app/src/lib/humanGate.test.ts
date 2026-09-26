@@ -25,6 +25,17 @@ describe('humanGateNotice', () => {
     expect(humanGateNotice({ gate })).toMatchObject({ tone: 'info', blocksFunding: false })
   })
 
+  it('tells a rejected wallet how to pass with World ID 4.0, without a stale “coming soon”', () => {
+    const rejected = humanGateNotice({ gate, verified: false, open: false, verifier: gate })
+    expect(rejected?.detail).toMatch(/World ID 4\.0/)
+    expect(rejected?.detail).toMatch(/registers the wallet/)
+    for (const view of [{ gate, verified: false }, { gate, verified: true }, { gate, verified: true, open: true }] as HumanGateView[]) {
+      const n = humanGateNotice(view)
+      expect(`${n?.title} ${n?.detail}`).not.toMatch(/coming soon|isn’t in this demo/)
+    }
+    expect(HUMAN_GATE_TITLE).toBe('Human verification required (World ID)')
+  })
+
   it('says so when the gate is open (no verifier yet)', () => {
     expect(humanGateNotice({ gate, verified: true, open: true })?.detail).toMatch(/every wallet passes for now/)
     expect(humanGateNotice({ gate, verified: true, open: false })?.detail).toMatch(/This wallet passes it/)
