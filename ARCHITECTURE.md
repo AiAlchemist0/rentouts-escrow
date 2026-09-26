@@ -278,7 +278,7 @@ The app reads `humanGate()`, `verifier()` and `isVerified(account)` and shows th
 
 World ID is the proof-of-personhood check at **one** moment: a tenant funding a new lease. It is not required to browse, list, claim rent, close a lease, open a dispute, or sync an ENS credential. The escrow never sees a World ID, a document, or a selfie. It only asks `isVerified(tenant)`.
 
-**What is deployed today.** `RentEscrow` on Ethereum Sepolia (`0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18`) has an immutable `humanGate` of `HumanGate` `0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd`. That gate's `verifier` is `address(0)`, so funding is **open**. The gate owner (the deployer EOA) turns the check on later with `setVerifier`. No escrow redeploy. Funded leases never consult the gate again.
+**What is deployed today.** `RentEscrow` on Ethereum Sepolia (`0x2357705A8382067d9bE9DadA2EEf70e23fa4cd18`) has an immutable `humanGate` of `HumanGate` `0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd`. That gate's `verifier` is `WorldIdV4Gate` `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa` (action `fund-lease-wallet`). Alice `0x484811c8c967809bE644A89d677933c29fb9e936` is the only verified wallet. The first gate `0x27052bD69b3d961940bCD093C21ba729b6c1B209` (action `fund-lease`) is superseded. No escrow redeploy. Funded leases never consult the gate again.
 
 **What was proved with a real World App (2026-09-26).** A production World ID **4.0** Proof of Human was approved on an iPhone and accepted by World:
 
@@ -287,13 +287,15 @@ World ID is the proof-of-personhood check at **one** moment: a tenant funding a 
 | Developer Portal app | RentOuts Escrow, team RentOuts |
 | `app_id` | `app_2432bfa166623cfbbf813744d0b4b00c` |
 | `rp_id` | `rp_9152be24431cdfcd` |
-| Action | `fund-lease` |
-| Signal | `rentouts-fund-lease` |
+| First action (spent, not registered) | `fund-lease`, signal `rentouts-fund-lease` |
+| Live action | `fund-lease-wallet`, signal Alice `0x484811c8c967809bE644A89d677933c29fb9e936` |
+| Live gate | `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`, `register` tx `0xdbbfc6dd08fdaa4da200b51e6515a7b60423a7c3f94feb06f4a3b28f65148908` |
+| `setVerifier` | `0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671`, block 11783640 |
 | Credential | `proof_of_human` |
 | Verify | `POST https://developer.world.org/api/v4/verify/rp_9152be24431cdfcd` → HTTP 200, `success: true`, `environment: production`, `protocol_version: 4.0` |
 | Registration | production and staging RP status `registered` |
 
-The phone does not talk to the escrow. The Mac page builds an RP-signed IDKit request (the signing key stays on the server, in `~/.rentouts-world.env`, never in the client or this repo). World App on the iPhone approves the proof. IDKit returns it. The server forwards that payload unchanged to World's verify API. Only a `success: true` result means the person is a unique human for `fund-lease`.
+The phone does not talk to the escrow. The Mac page builds an RP-signed IDKit request (the signing key stays on the server, in `~/.rentouts-world.env`, never in the client or this repo). World App on the iPhone approves the proof. IDKit returns it. The server forwards that payload unchanged to World's verify API. Only a `success: true` result for action `fund-lease-wallet` is signed onto a wallet. The first `fund-lease` proof was spent on a text signal and was never registered.
 
 ```mermaid
 sequenceDiagram
@@ -304,12 +306,12 @@ sequenceDiagram
     participant World as developer.world.org
     participant HG as HumanGate
     participant RE as RentEscrow
-    Sign->>Page: rp_context for action fund-lease
+    Sign->>Page: rp_context for action fund-lease-wallet
     Page->>Phone: QR / connector URI
     Phone-->>Page: Proof of Human (protocol 4.0)
     Page->>World: POST /api/v4/verify/rp_9152be24431cdfcd
     World-->>Page: success, nullifier
-    Note over HG,RE: WorldIdV4Gate.register stores the wallet, then setVerifier
+    Note over HG,RE: register stored alice, then setVerifier pointed here
     Phone->>RE: fundLease
     RE->>HG: isVerified(tenant)
     HG-->>RE: true only after that wallet was verified
@@ -703,7 +705,7 @@ The same contracts on Etherscan: [`AIArbiter`](https://sepolia.etherscan.io/addr
 | Issuer EOA | [`0xF6048B190D178Fb6F0870c65CD2F7E06381713C4`](https://sepolia.etherscan.io/address/0xF6048B190D178Fb6F0870c65CD2F7E06381713C4) | 🟢 live; judged keys only since the role cleanup ([§3](#3-roles-and-trust-model)) |
 | Human arbiter EOA (`AIArbiter.human`) | [`0x798b01Cef62b889943Ce1D3C5011a755B297e486`](https://sepolia.etherscan.io/address/0x798b01Cef62b889943Ce1D3C5011a755B297e486) | 🟢 live |
 | AI judge key (`AIArbiter.agent`, keystore `rentouts-judge`) | [`0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA`](https://sepolia.etherscan.io/address/0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA) | 🟢 live |
-| World ID verifier | _not built yet_ | ⏸ next, plugged in with `HumanGate.setVerifier` |
+| World ID verifier | [`0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`](https://sepolia.etherscan.io/address/0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa) | 🟢 live. Alice verified. First gate `0x2705…B209` superseded |
 | Circle test USDC (Circle's) | [`0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`](https://sepolia.etherscan.io/address/0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238) | 🟢 external, 6 decimals |
 | ENS Universal Resolver (ENS's) | [`0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe`](https://sepolia.etherscan.io/address/0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe) | 🟢 external |
 | ENS `ETHRegistry` (ENS's) | [`0x657eA849311d3D5823348ddEd7C2AaAFb3EDE09E`](https://sepolia.etherscan.io/address/0x657eA849311d3D5823348ddEd7C2AaAFb3EDE09E) | 🟢 external |
@@ -714,7 +716,7 @@ The same contracts on Etherscan: [`AIArbiter`](https://sepolia.etherscan.io/addr
 2. **`DeployEscrow`** (done): deploys `LeaseShare1155`, then `HumanGate` (open), then `RentEscrow` with `arbiter = AIArbiter` and `humanGate = HumanGate`. It then makes the escrow the share minter. The deployer is allowlisted as the demo landlord.
 3. **`bindEscrow`** (done): the human arbiter binds `AIArbiter` to that escrow, once.
 4. **`CredentialSync`** (done): it takes the escrow address in its constructor and is made an issuer. The issuer role cleanup was broadcast right after.
-5. **World ID, next**: `HumanGate.setVerifier(worldVerifier)` from the gate owner. The escrow is not redeployed.
+5. **World ID** (done): `HumanGate.setVerifier(0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa)` from the gate owner, tx `0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671`. The escrow was not redeployed.
 
 The commands that were run, for a redeploy:
 
@@ -769,7 +771,7 @@ Resulting balances: issuer 600, allowlisted recipient 400, totalSupply 1000.
 - **The token must be a plain ERC-20**, with no fee-on-transfer or rebasing (USDC qualifies).
 
 **Human gate**
-- **World ID is proved, not yet gating leases.** On 2026-09-26 a production World ID 4.0 Proof of Human for action `fund-lease` was approved in World App on an iPhone and accepted by `POST /api/v4/verify/rp_9152be24431cdfcd` (app `app_2432bfa166623cfbbf813744d0b4b00c`). The deployed `HumanGate` is still open (`verifier` `0`), so `fundLease` does not require that proof yet. A World ID 3.0 on-chain verifier cannot check this 4.0 proof. One name per address remains the only on-chain sybil friction until `setVerifier` points at a verifier filled from successful 4.0 checks.
+- **World ID gates new funding.** On 2026-09-26 a production World ID 4.0 Proof of Human for action `fund-lease-wallet`, signal Alice `0x484811c8c967809bE644A89d677933c29fb9e936`, was accepted by `POST /api/v4/verify/rp_9152be24431cdfcd` and registered on `WorldIdV4Gate` `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`. `HumanGate` points at that contract. An unregistered wallet's `fundLease` reverts `NotVerifiedHuman`. The RP signer attests the verify result, because Sepolia has no World ID 4.0 zk verifier. A World ID 3.0 on-chain verifier cannot check this 4.0 proof.
 - **The gate owner is trusted for access only.** The deployer EOA can refuse funding of new leases by choosing the verifier. It can never touch funded leases or funds. A verifier that reverts blocks new funding (fail closed) until the owner fixes or clears it.
 
 **Lease shares**
