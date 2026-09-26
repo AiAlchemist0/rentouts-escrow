@@ -1,6 +1,8 @@
-# Bektur: World ID 4.0 is on, and no wallet is registered yet
+# Bektur: World ID 4.0 is on, and alice is registered on the live gate
 
-`setVerifier` is done. Tx `0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee`, block 11783482, from `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE`. `HumanGate` `0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd` `verifier()` is `0x27052bD69b3d961940bCD093C21ba729b6c1B209`. `WorldIdV4Gate` has zero `HumanRegistered` events, so every `fundLease` reverts `NotVerifiedHuman`, including alice. Rollback is `setVerifier(address(0))` from your deployer. Do **not** redeploy `RentEscrow`.
+**Done Sat 12:42 JST:** `HumanGate` `0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd` `verifier()` is `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa` (tx `0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671`, block 11783640). Alice is registered there, so she can `fundLease`; every other wallet reverts `NotVerifiedHuman`.
+
+The first `setVerifier` (Sat 12:09 JST): tx `0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee`, block 11783482, from `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE`. `verifier()` was then `0x27052bD69b3d961940bCD093C21ba729b6c1B209`, which has zero `HumanRegistered` events, so until 12:42 every `fundLease` reverted `NotVerifiedHuman`, including alice. That gate is superseded. Rollback is `setVerifier(address(0))` from your deployer. Do **not** redeploy `RentEscrow`.
 
 ## What this is
 
@@ -51,11 +53,11 @@ cast send 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd \
   --account rentouts-deployer --rpc-url https://ethereum-sepolia-rpc.publicnode.com
 ```
 
-Until you send that, `HumanGate` still points at the first gate and every `fundLease` reverts `NotVerifiedHuman`.
+Sent Sat 12:42 JST: tx `0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671`, block 11783640. `HumanGate` now points at this gate, so alice can fund.
 
 ## Already on-chain
 
-`WorldIdV4Gate` `0x27052bD69b3d961940bCD093C21ba729b6c1B209` is Sourcify-verified. Deploy tx `0xf6009731cf6bd6431914961d33746cc7bfc8cd626e730f31df0f333d0a6a199c`. Signer `0xbb80c666Ed8E8B5ec45481f911c7a892f8A842CA`. Action `fund-lease`. Your `setVerifier` tx is `0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee`.
+`WorldIdV4Gate` `0x27052bD69b3d961940bCD093C21ba729b6c1B209` is Sourcify-verified. Deploy tx `0xf6009731cf6bd6431914961d33746cc7bfc8cd626e730f31df0f333d0a6a199c`. Signer `0xbb80c666Ed8E8B5ec45481f911c7a892f8A842CA`. Action `fund-lease`. Your first `setVerifier` tx is `0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee`; the second, to `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa`, is `0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671`.
 
 Rollback, from your deployer only:
 

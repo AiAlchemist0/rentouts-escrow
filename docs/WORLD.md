@@ -1,6 +1,6 @@
-# World ID 4.0 — live gate, registration still empty
+# World ID 4.0 — live gate, alice registered
 
-`HumanGate` `0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd` on Ethereum Sepolia points at `WorldIdV4Gate` `0x27052bD69b3d961940bCD093C21ba729b6c1B209`.
+`HumanGate` `0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd` on Ethereum Sepolia points at `WorldIdV4Gate` `0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa` (action `fund-lease-wallet`, alice registered) since Sat 12:42 JST: `setVerifier` tx `0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671`, block 11783640. From Sat 12:09 to 12:42 JST it pointed at the first `WorldIdV4Gate` `0x27052bD69b3d961940bCD093C21ba729b6c1B209`, now superseded. The table below is that first switch.
 
 | | |
 |---|---|
@@ -36,7 +36,7 @@ cast call $GATE "isVerified(address)(bool)" $ALICE --rpc-url $SEPOLIA_RPC_URL
 
 `$NULLIFIER`, `$DEADLINE`, and `$SIGNATURE` come from the backend after verify. The signature is EIP-191 over `keccak256(abi.encode(chainId, gate, actionHash, wallet, nullifier, deadline))`.
 
-This iPhone already used its `fund-lease` nullifier (signal `rentouts-fund-lease`, never registered on-chain). The replacement action is `fund-lease-wallet` on a second gate. `HumanGate` still points at the first gate until Bektur calls `setVerifier`.
+This iPhone already used its `fund-lease` nullifier (signal `rentouts-fund-lease`, never registered on-chain). The replacement action is `fund-lease-wallet` on a second gate. `HumanGate` has pointed at this second gate since Bektur's `setVerifier` (Sat 12:42 JST).
 
 | | |
 |---|---|
@@ -47,7 +47,7 @@ This iPhone already used its `fund-lease` nullifier (signal `rentouts-fund-lease
 | Signal / tenant | `0x484811c8c967809bE644A89d677933c29fb9e936` |
 | `register` tx | `0xdbbfc6dd08fdaa4da200b51e6515a7b60423a7c3f94feb06f4a3b28f65148908` (block 11783569) |
 | `isVerified(alice)` | `true` on this gate |
-| `setVerifier` | pending, from `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE` |
+| `setVerifier` | `0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671` (block 11783640, Sat 12:42 JST), from `0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE` |
 
 ```bash
 cast send 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd \

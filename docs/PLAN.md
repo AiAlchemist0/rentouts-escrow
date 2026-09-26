@@ -60,7 +60,8 @@ gantt
     Deploy AIArbiter, then the escrow stack       :done, esc4, 2026-09-26 03:05, 3m
     Live on Ethereum Sepolia, 11 txs              :milestone, done, live, 2026-09-26 03:09, 0m
     Source verified, Sourcify and Blockscout      :milestone, done, src, 2026-09-26 03:15, 0m
-    World verifier behind HumanGate               :world, 2026-09-26 12:00, 5h
+    World ID 4.0 gate behind HumanGate            :done, world, 2026-09-26 12:09, 33m
+    Switched to alice's gate, alice can fund      :milestone, done, world2, 2026-09-26 12:42, 0m
 
     section AI dispute judge
     AIArbiter, invariants, deploy script          :done, ai1, 2026-09-26 00:45, 15m
@@ -109,12 +110,14 @@ Done bars come from commit times and [`docs/ens/LOG.md`](./ens/LOG.md). The othe
 | Sat 03:05–03:09 | **Deployed on Ethereum Sepolia:** `AIArbiter`, then `LeaseShare1155`, `HumanGate` and `RentEscrow` (plus `setMinter`), then `bindEscrow`, then `CredentialSync` (plus `setIssuer`), then the issuer role cleanup (3 `revokeRoles`). 11 transactions, all status 1, about 0.0062 ETH. The wiring was read back on-chain (27/27 checks), and the 42 ENS fork tests passed against live Sepolia. | [ARCHITECTURE §10](../ARCHITECTURE.md#10-deployments) |
 | Sat 03:15 | All five contracts source verified: Sourcify `exact_match` (creation and runtime code) and Blockscout. Each creation bytecode was rebuilt and matched byte for byte against its deploy transaction. Etherscan still needs an API key. | [ARCHITECTURE §10](../ARCHITECTURE.md#10-deployments) |
 | Sat 03:25 | These docs updated with the live addresses and current test counts | `docs/system-architecture` |
+| Sat 12:09 | **World ID 4.0 in the funding path:** `HumanGate.setVerifier(WorldIdV4Gate 0x2705…B209)` (action `fund-lease`) from the gate owner ([`0x56b47b25…43e8ee`](https://sepolia.etherscan.io/tx/0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee)). No escrow redeploy. Nobody could register there (the phone's one proof was spent off-chain) | PRs #9–#11 |
+| Sat 12:28–12:42 | Alice registered on a second gate `0x5Cb8…aABa` (action `fund-lease-wallet`, block 11783569), then `setVerifier` switched the `HumanGate` to it ([`0xcd93549e…b86671`](https://sepolia.etherscan.io/tx/0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671), block 11783640). The first gate is superseded; alice is the one wallet that can fund | PR #12, `qa/final` |
 
 ### Next
 
 | Target | What | Owner |
 |---|---|---|
-| Sat morning | **World integration** (done Sat 12:09 JST): `WorldIdV4Gate` (World ID 4.0, RP-signed `register`), then `HumanGate.setVerifier` on the live gate `0xFF68…3abd` from the gate owner ([`0x56b47b25…43e8ee`](https://sepolia.etherscan.io/tx/0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee)). No escrow redeploy. Alice is registered on the second gate `0x5Cb8…aABa` (`fund-lease-wallet`); the switch to it is one more `setVerifier`. | team |
+| Sat morning | **World integration** (done Sat 12:09 JST): `WorldIdV4Gate` (World ID 4.0, RP-signed `register`), then `HumanGate.setVerifier` on the live gate `0xFF68…3abd` from the gate owner ([`0x56b47b25…43e8ee`](https://sepolia.etherscan.io/tx/0x56b47b25c08ecec6022814b78273d2568bc7a8a4bea4eb6b4dda04180543e8ee)). No escrow redeploy. Since 12:42 JST the verifier is the second gate `0x5Cb8…aABa` (`fund-lease-wallet`), where alice is registered ([`0xcd93549e…b86671`](https://sepolia.etherscan.io/tx/0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671)). | team |
 | Sat morning | **Live demo on Sepolia:** point the app at the live addresses ([DEMO pre-flight](./DEMO.md#pre-flight-t-30-min)) and run the whole demo once. It covers lease → fund → claim → close → sync, then dispute → evidence → `./run.sh --lease <id> --propose` (GLM 5.3) → challenge window → `execute`. Rehearse an appeal and a `resolveByHuman` override. | team |
 | Sat | Draft PRs, external reviews, fixes, merges (see §6) | team |
 | Sat | Optional: Etherscan verification (needs an `ETHERSCAN_API_KEY`); Sourcify and Blockscout are done | team |
@@ -124,7 +127,7 @@ Done bars come from commit times and [`docs/ens/LOG.md`](./ens/LOG.md). The othe
 
 ## 4. Deploy order
 
-Every link between the contracts is immutable except `HumanGate.verifier` and the `AIArbiter` settings, so the order is fixed. Steps 1 to 4 were broadcast on Sat 03:05–03:09 JST. The addresses, transactions and commands are in [ARCHITECTURE §10](../ARCHITECTURE.md#10-deployments). Step 5 is next.
+Every link between the contracts is immutable except `HumanGate.verifier` and the `AIArbiter` settings, so the order is fixed. Steps 1 to 4 were broadcast on Sat 03:05–03:09 JST. The addresses, transactions and commands are in [ARCHITECTURE §10](../ARCHITECTURE.md#10-deployments). Step 5 followed on Sat 12:09 JST and was switched to a second gate at 12:42 JST.
 
 ```mermaid
 flowchart LR
@@ -138,7 +141,7 @@ flowchart LR
 2. **`DeployEscrow`** with `ESCROW_ARBITER` = the `AIArbiter` address. In one run it deploys `LeaseShare1155`, then `HumanGate` (owner = deployer, verifier `0` = open), then `RentEscrow`. It then makes the escrow the share minter and allowlists the deployer as the demo landlord. Recorded under `"sepolia"`.
 3. **`bindEscrow(rentEscrow)`**, sent once by the human arbiter. `AIArbiter` refuses an escrow whose arbiter is not itself.
 4. **`CredentialSync`** from `ens/` with `ESCROW_ADDRESS` = the escrow, which makes it a `RentoutsSubnames` issuer. Recorded in `ens/deployments/sepolia.json`. Also broadcast the issuer role cleanup.
-5. **World ID** (done Sat 12:09 JST): `HumanGate.setVerifier(WorldIdV4Gate)` from the deployer.
+5. **World ID** (done Sat 12:09 JST): `HumanGate.setVerifier(WorldIdV4Gate)` from the deployer. At 12:42 JST a second `setVerifier` pointed it at the `fund-lease-wallet` gate alice is registered on.
 
 Every script dry-runs first. The root scripts record addresses only in a real `--broadcast`, and the ENS phases send nothing unless `BROADCAST=true`.
 
@@ -148,7 +151,7 @@ Every script dry-runs first. The root scripts record addresses only in a real `-
 |---|---|---|---|
 | **ENS** | ENSv2 subnames in our own `UserRegistry`. Soulbound through ENS roles, revocable with a record wipe, never expiring. A shared `PermissionedResolver` with **key-scoped** issuer roles (Enhanced Access Control). Reads only through the Universal Resolver. An ENSIP-19 default address record. A credential derived on-chain from the escrow. | [`ens/`](../ens/), the app's identity step | 🟢 live on Sepolia, including `CredentialSync` and the issuer role cleanup |
 | **Curvegrid: Best RWA Tokenization Project** | `LeaseShare1155`: ERC-1155 lease shares with compliance-aware transfer logic in `_update` (mint, single and batch). Minted to the allowlisted landlord at `createLease`, so listing is compliance-gated. | [`src/LeaseShare1155.sol`](../src/LeaseShare1155.sol) | 🟢 standalone on Base Sepolia; 🟢 integrated on Ethereum Sepolia (`0x9A9F…1E09`, minter = `RentEscrow`) |
-| **World** | `HumanGate` in `fundLease`: a verified-human check on who may fund a new lease, with a verifier that can be set or swapped without redeploying the escrow. Its verifier is `WorldIdV4Gate` (World ID 4.0, live since Sat 12:09 JST). | [`src/HumanGate.sol`](../src/HumanGate.sol), `RentEscrow.fundLease`, the app's fund step | 🟢 `HumanGate` live on Sepolia (open); 🟡 World verifier next |
+| **World** | `HumanGate` in `fundLease`: a verified-human check on who may fund a new lease, with a verifier that can be set or swapped without redeploying the escrow. Its verifier is `WorldIdV4Gate` (World ID 4.0, live since Sat 12:09 JST). | [`src/HumanGate.sol`](../src/HumanGate.sol), `RentEscrow.fundLease`, the app's fund step | 🟢 live on Sepolia: `HumanGate.verifier` = `WorldIdV4Gate` `0x5Cb8…aABa` since Sat 12:42 JST, alice registered |
 | **Continuity** | RentOuts is a live product; everything in this repo was written during the event | [rentouts.co](https://rentouts.co) | n/a |
 
 ## 6. Review and merge process
@@ -166,7 +169,7 @@ flowchart LR
     M --> DEP["Deploy or redeploy from the merged commit<br/>record addresses in deployments JSON and docs"]
 ```
 
-**Branches** (snapshot at Sat 01:30 JST; all of them were merged into `main` as PRs #3–#7 at Sat 03:35 JST, and World as PRs #9–#11):
+**Branches** (snapshot at Sat 01:30 JST; all of them were merged into `main` as PRs #3–#7 at Sat 03:35 JST, and World as PRs #9–#12):
 
 | Branch | Contents | State |
 |---|---|---|

@@ -115,7 +115,18 @@ npm run live:smoke     # live read of the configured contracts on Sepolia: check
 `live:smoke` resolves addresses the way the app does (`VITE_*`, then `deployments.json`, then the escrow's
 getters) and checks `RentEscrow.arbiter()` = the AIArbiter, `AIArbiter.escrow()`, `RentEscrow.leaseShare()`,
 `LeaseShare1155.minter()`, `RentEscrow.humanGate()`, `CredentialSync.escrow()` / `.subnames()` and the
-issuer role on `RentoutsSubnames`. It exits 1 on any mismatch.
+issuer role on `RentoutsSubnames`. For the World gate it requires `HumanGate.verifier()` to be the `WorldIdV4Gate`
+with the latest recorded `setVerifierBlock` in `deployments.json` (an open gate fails unless
+`SMOKE_ALLOW_OPEN_GATE=1`), checks that gate's `signer()`, and requires `HumanGate.isVerified(alice)` to be `true`
+(`SMOKE_TENANT` overrides the tenant). It exits 1 on any mismatch. The World lines, Sat 2026-09-26 12:51 JST:
+
+```
+ok    escrow.humanGate() = 0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd
+ok    humanGate.verifier() = 0x5Cb885E6292003492932f3fa647A9d6Bf8A4aABa (WorldIdV4Gate "sepoliaWorldIdV4Wallet", action fund-lease-wallet)
+ok    worldIdV4Gate.signer() = 0xbb80c666Ed8E8B5ec45481f911c7a892f8A842CA
+      superseded: 0x27052bD69b3d961940bCD093C21ba729b6c1B209 (sepoliaWorldIdV4, action fund-lease, setVerifier block 11783482)
+ok    humanGate.isVerified(demo tenant 0x484811c8c967809bE644A89d677933c29fb9e936) = true
+```
 
 `ens:smoke` output (Fri 2026-09-25):
 

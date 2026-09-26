@@ -32,11 +32,19 @@ const deployments = readJson('../../deployments.json') ?? {}
 const core = onSepolia(deployments.sepolia)
 const ai = onSepolia(deployments.sepoliaAIArbiter)
 const ens = readJson('../../ens/deployments/sepolia.json') ?? {}
-// Every World ID 4.0 gate recorded in deployments.json (any Sepolia entry with a "worldIdV4Gate").
+// Every World ID 4.0 gate recorded in deployments.json (any Sepolia entry with a "worldIdV4Gate"). setVerifierBlock is
+// the block of the HumanGate.setVerifier that pointed at it; the highest one is the gate that must be live now.
 const worldGates = Object.entries(deployments)
   .map(([key, entry]) => [key, onSepolia(entry)])
   .filter(([, e]) => asAddress(e.worldIdV4Gate))
-  .map(([key, e]) => ({ key, gate: asAddress(e.worldIdV4Gate), humanGate: asAddress(e.humanGate), signer: asAddress(e.signer), action: e.action }))
+  .map(([key, e]) => ({
+    key,
+    gate: asAddress(e.worldIdV4Gate),
+    humanGate: asAddress(e.humanGate),
+    signer: asAddress(e.signer),
+    action: e.action,
+    setVerifierBlock: Number.isSafeInteger(e.setVerifierBlock) ? e.setVerifierBlock : undefined,
+  }))
 // The demo tenant (alice.rentouts.eth, docs/DEMO.md) must pass the gate before any lease is funded.
 const demoTenant = asAddress(process.env.SMOKE_TENANT) ?? '0x484811c8c967809bE644A89d677933c29fb9e936'
 
@@ -152,17 +160,23 @@ else {
     const verifier = await read(humanGate, humanGateAbi, 'verifier')
     const recorded = worldGates.filter((g) => !g.humanGate || same(g.humanGate, humanGate))
     const match = recorded.find((g) => same(g.gate, verifier))
+    // The gate of the latest recorded setVerifier; the ones switched away from before it are superseded.
+    const latest = recorded.filter((g) => g.setVerifierBlock !== undefined).sort((a, b) => b.setVerifierBlock - a.setVerifierBlock)[0]
+    const label = (g) => `${g.gate} (${g.key}, action ${g.action}${g.setVerifierBlock !== undefined ? `, setVerifier block ${g.setVerifierBlock}` : ''})`
     if (verifier === zeroAddress) {
       // An open gate lets everyone fund, which takes World ID out of the flow: only OK when done on purpose.
       if (process.env.SMOKE_ALLOW_OPEN_GATE) ok('humanGate.verifier() = zero (open: everyone passes; SMOKE_ALLOW_OPEN_GATE set)')
       else fail('humanGate.verifier() = zero: the gate is open and World ID is out of the funding path (SMOKE_ALLOW_OPEN_GATE=1 if on purpose)')
     } else if (!recorded.length) ok(`humanGate.verifier() = ${verifier} (no World gate recorded in deployments.json)`)
     else if (!match) fail(`humanGate.verifier() = ${verifier}, expected a recorded WorldIdV4Gate: ${recorded.map((g) => `${g.gate} (${g.key})`).join(', ')}`)
-    else {
+    else if (latest && !same(match.gate, latest.gate)) {
+      fail(`humanGate.verifier() = ${label(match)}, but the latest recorded setVerifier is ${label(latest)}: the chain and deployments.json disagree`)
+    } else {
       ok(`humanGate.verifier() = ${verifier} (WorldIdV4Gate "${match.key}", action ${match.action})`)
       if (match.signer && (await hasCode('WorldIdV4Gate', verifier))) {
         expectEq('worldIdV4Gate.signer()', await read(verifier, worldGateAbi, 'signer'), match.signer)
       }
+      for (const g of recorded) if (!same(g.gate, verifier)) console.log(`      superseded: ${label(g)}`)
     }
     if (await read(humanGate, humanGateAbi, 'isVerified', [demoTenant])) ok(`humanGate.isVerified(demo tenant ${demoTenant}) = true`)
     else {

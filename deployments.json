@@ -22,7 +22,7 @@
     "setVerifierBlock": 11783482,
     "setVerifierFrom": "0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE",
     "registeredWallets": 0,
-    "note": "This phone already spent action fund-lease. HumanGate still points here until Bektur setVerifier to sepoliaWorldIdV4Wallet."
+    "note": "This phone already spent action fund-lease. HumanGate pointed here Sat 12:09-12:42 JST; superseded by sepoliaWorldIdV4Wallet (setVerifier 0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671, block 11783640)."
   },
   "sepoliaWorldIdV4Wallet": {
     "chainId": 11155111,
@@ -38,7 +38,9 @@
     "registerBlock": 11783569,
     "nullifier": "0x046124a8dfce00cbd288c7f28644811a38c27745d138afe412a68e1b1d7a7886",
     "humanGate": "0xFF6850c48B55d3d4a1e21b8562F15c653a3c3abd",
-    "setVerifier": "pending — gate owner 0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE"
+    "setVerifier": "0xcd93549e9a3a703be498b96bd6ad47afd46c1d332a637460f4b94e127eb86671",
+    "setVerifierBlock": 11783640,
+    "setVerifierFrom": "0xdD9c17ecAe9301b67De17F1ba2b5084EaC59CCCE"
   },
   "sepoliaAIArbiter": {
     "agent": "0x4a444685F3E700D0d5B8Fe53d987f8029cced0dA",
