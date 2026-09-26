@@ -19,13 +19,14 @@ import { erc20Abi } from './abi/erc20'
 import { humanGateAbi } from './abi/humanGate'
 import { rentEscrowAbi } from './abi/rentEscrow'
 import { rentoutsSubnamesAbi } from './abi/rentoutsSubnames'
-import { CREDENTIAL_KEYS, ENS, ENV_CONTRACTS } from './config'
+import { CREDENTIAL_KEYS, ENS, ENV_CONTRACTS, JUDGE_ENS_NAME } from './config'
 import { parseAddressInput, resolveAddressInput, type ResolvedInput } from './lib/addressInput'
 import { judgeFor, type ArbiterLog, type Ruling } from './lib/aiJudge'
 import { labelId, labelUnder, type CredentialRecords } from './lib/credential'
 import { errorMessage } from './lib/errors'
 import { tokenMetaFrom } from './lib/format'
 import type { HumanGateView } from './lib/humanGate'
+import { judgeNameVerified } from './lib/judgeName'
 import { recordTx } from './txLog'
 
 export function useSepoliaClient() {
@@ -237,6 +238,37 @@ export function useParentName(): string | undefined {
     query: { staleTime: Infinity },
   })
   return data
+}
+
+const relayJudgeAbi = [
+  { type: 'function', name: 'judge', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
+] as const
+
+/**
+ * The AI judge's ENS name (judge.rentouts.eth) for `agent` (AIArbiter.agent() or the Proposed event's agent):
+ * `name` only when it forward-resolves to that agent, or to the EnsAgentRelay's judge when the agent is the
+ * relay. Any failure (name not registered yet, RPC error) leaves `name` undefined: callers show the address.
+ */
+export function useJudgeName(agent: Address | undefined): { name?: string } {
+  const client = useSepoliaClient()
+  const { data } = useQuery({
+    queryKey: ['judge-ens-name', JUDGE_ENS_NAME, agent],
+    enabled: !!agent,
+    staleTime: 60_000,
+    retry: false,
+    queryFn: async () => {
+      const resolved = await client
+        .getEnsAddress({ name: normalize(JUDGE_ENS_NAME), universalResolverAddress: ENS.universalResolver })
+        .catch(() => null)
+      if (!resolved) return false
+      // A relay answers judge(); a plain key doesn't (the call fails and is ignored).
+      const relayJudge = await client
+        .readContract({ address: agent!, abi: relayJudgeAbi, functionName: 'judge' })
+        .catch(() => null)
+      return judgeNameVerified({ agent, resolved, relayJudge })
+    },
+  })
+  return data ? { name: JUDGE_ENS_NAME } : {}
 }
 
 /** The connected (or any) account's RentOuts name, "" if none. */

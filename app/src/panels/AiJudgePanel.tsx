@@ -3,7 +3,7 @@ import { isAddressEqual, type Address } from 'viem'
 import { aiArbiterAbi } from '../abi/aiArbiter'
 import { LeaseState } from '../abi/rentEscrow'
 import { AddressLink, ExtLink, Notice, TxStatus } from '../components/ui'
-import { useArbiterLogs, useContracts, useRuling, useTx, type AiArbiterInfo, type LeaseRow } from '../hooks'
+import { useArbiterLogs, useContracts, useJudgeName, useRuling, useTx, type AiArbiterInfo, type LeaseRow } from '../hooks'
 import {
   BPS,
   RulingStatus,
@@ -229,6 +229,9 @@ export function AiJudgePanel({ lease, account, info, now, nameOf }: Props) {
   const fmt = (v: bigint) => `${formatToken(v, tokenDecimals)} ${tokenSymbol}`
 
   const ruling = rulingQuery.data?.ruling
+  const record = disputeLog(logs.data ?? [], lease.id, ruling && ruling.proposedAt > 0n ? ruling.rulingHash : undefined)
+  // Shown as the proposer only when judge.rentouts.eth resolves to it (else the raw address). Before the early return: a hook.
+  const judgeName = useJudgeName(record.proposal?.agent ?? info.agent).name
   // A closed lease shows the panel only if AIArbiter settled it.
   if (!disputed && (!ruling || ruling.status === RulingStatus.NONE)) return null
 
@@ -238,7 +241,6 @@ export function AiJudgePanel({ lease, account, info, now, nameOf }: Props) {
   const used = isTenant ? rulingQuery.data?.tenantStatements : isLandlord ? rulingQuery.data?.landlordStatements : undefined
   const left = used === undefined ? undefined : Math.max(0, info.maxStatementsPerParty - used)
   const view = judgeView({ leaseState: lease.state, ruling, now, viewer: { isTenant, isLandlord, isHuman }, statementsLeft: left })
-  const record = disputeLog(logs.data ?? [], lease.id, ruling && ruling.proposedAt > 0n ? ruling.rulingHash : undefined)
 
   const hadProposal = !!ruling && ruling.proposedAt > 0n
   const humanRuled = ruling?.status === RulingStatus.HUMAN_RESOLVED
@@ -321,7 +323,13 @@ export function AiJudgePanel({ lease, account, info, now, nameOf }: Props) {
                 <dt>Proposed by</dt>
                 <dd>
                   {/* Not the model: the Proposed event doesn't record it (the ruling hash commits to it). */}
-                  AI judge key{agent ? <> · <AddressLink address={agent} /></> : null}
+                  {judgeName && agent ? (
+                    <span title={`${judgeName} resolves (ENS) to the key AIArbiter lets propose`}>
+                      <AddressLink address={agent} name={judgeName} /> ✓
+                    </span>
+                  ) : (
+                    <>AI judge key{agent ? <> · <AddressLink address={agent} /></> : null}</>
+                  )}
                 </dd>
               </div>
               <div>
